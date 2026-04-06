@@ -30,3 +30,9 @@ Repository = "https://github.com/ikernavarro4/data-narrator"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["datanarrator*"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::FutureWarning",
+    "ignore::DeprecationWarning",
+]

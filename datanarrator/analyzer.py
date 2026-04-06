@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 class DataAnalyzer:
@@ -28,7 +30,7 @@ class DataAnalyzer:
     def _overview(self) -> dict:
         df = self.df
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        categorical_cols = df.select_dtypes(include=["str", "category"]).columns.tolist()
+        categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
         datetime_cols = df.select_dtypes(include=["datetime"]).columns.tolist()
 
         # Intentar detectar fechas en columnas string
@@ -82,7 +84,7 @@ class DataAnalyzer:
 
     def _analyze_categorical(self) -> list:
         results = []
-        cat_cols = self.df.select_dtypes(include=["str", "category"]).columns
+        cat_cols = self.df.select_dtypes(include=["object", "category"]).columns
         for col in cat_cols:
             series = self.df[col].dropna()
             value_counts = series.value_counts()
@@ -160,7 +162,7 @@ class DataAnalyzer:
                 })
 
         # Alta cardinalidad
-        for col in df.select_dtypes(include=["str", "category"]).columns:
+        for col in df.select_dtypes(include=["object", "category"]).columns:
             if df[col].nunique() > 50:
                 alerts.append({
                     "type": "high_cardinality",
