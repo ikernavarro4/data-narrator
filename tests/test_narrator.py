@@ -220,3 +220,31 @@ def test_analyzer_alerts_high_nulls(df_with_nulls):
     result = analyzer.analyze()
     alert_types = [a["type"] for a in result["alerts"]]
     assert "high_nulls" in alert_types
+
+
+# ------------------------------------------------------------------
+# Tests de compare()
+# ------------------------------------------------------------------
+
+def test_compare_returns_string(df_basic):
+    df2 = df_basic.copy()
+    df2["edad"] = df2["edad"] * 2
+    n = Narrator(df_basic)
+    result = n.compare(df2)
+    assert isinstance(result, str)
+
+def test_compare_invalid_input(df_basic):
+    n = Narrator(df_basic)
+    with pytest.raises(TypeError):
+        n.compare("no soy un dataframe")
+
+def test_compare_empty_dataframe(df_basic):
+    n = Narrator(df_basic)
+    with pytest.raises(ValueError):
+        n.compare(pd.DataFrame())
+
+def test_compare_english(df_basic):
+    df2 = df_basic.copy()
+    n = Narrator(df_basic, lang="en")
+    result = n.compare(df2)
+    assert "comparison" in result

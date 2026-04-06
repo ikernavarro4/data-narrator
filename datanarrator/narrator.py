@@ -217,3 +217,92 @@ class Narrator:
             lines.append(f"  ⚠  {a['message']}")
             lines.append(f"     → {a['suggestion']}")
         return "\n".join(lines)
+
+    def compare(self, df2):
+        if not isinstance(df2, __import__('pandas').DataFrame):
+            raise TypeError("El input debe ser un DataFrame de pandas.")
+        if df2.empty:
+            raise ValueError("El segundo DataFrame no puede estar vacío.")
+        df1 = self.df
+        out = []
+        if self.lang == "es":
+            out.append("--- Comparación de datasets ---")
+            diff = df2.shape[0] - df1.shape[0]
+            if diff > 0:
+                out.append(f"El segundo dataset tiene {diff} registros más.")
+            elif diff < 0:
+                out.append(f"El segundo dataset tiene {abs(diff)} registros menos.")
+            else:
+                out.append("Ambos datasets tienen el mismo número de registros.")
+            cols1, cols2 = set(df1.columns), set(df2.columns)
+            if cols1 - cols2:
+                out.append(f"Columnas solo en el primero: {', '.join(cols1 - cols2)}.")
+            if cols2 - cols1:
+                out.append(f"Columnas solo en el segundo: {', '.join(cols2 - cols1)}.")
+            common = [c for c in df1.select_dtypes(include="number").columns if c in df2.select_dtypes(include="number").columns]
+            for col in common:
+                m1, m2 = df1[col].mean(), df2[col].mean()
+                if m1 == 0:
+                    continue
+                pct = round((m2 - m1) / abs(m1) * 100, 1)
+                if abs(pct) >= 10:
+                    d = "subió" if pct > 0 else "bajó"
+                    out.append(f"'{col}': media {d} de {round(m1,2)} a {round(m2,2)} ({pct:+.1f}%).")
+            n1 = df1.isnull().sum().sum() / (df1.shape[0] * df1.shape[1]) * 100
+            n2 = df2.isnull().sum().sum() / (df2.shape[0] * df2.shape[1]) * 100
+            dn = round(n2 - n1, 1)
+            if abs(dn) >= 5:
+                d = "más" if dn > 0 else "menos"
+                out.append(f"⚠  El segundo dataset tiene {abs(dn)}% {d} valores nulos.")
+                out.append("     → Posible degradación en calidad de datos.")
+            drift = []
+            for col in common:
+                s1, s2 = df1[col].std(), df2[col].std()
+                if s1 == 0:
+                    continue
+                if abs(s2 - s1) / s1 * 100 >= 30:
+                    drift.append(col)
+            if drift:
+                out.append(f"⚠  Posible data drift en: {', '.join(drift)}.")
+                out.append("     → Dispersión cambió más del 30%. Revisa antes de producción.")
+        else:
+            out.append("--- Dataset comparison ---")
+            diff = df2.shape[0] - df1.shape[0]
+            if diff > 0:
+                out.append(f"The second dataset has {diff} more rows.")
+            elif diff < 0:
+                out.append(f"The second dataset has {abs(diff)} fewer rows.")
+            else:
+                out.append("Both datasets have the same number of rows.")
+            cols1, cols2 = set(df1.columns), set(df2.columns)
+            if cols1 - cols2:
+                out.append(f"Columns only in first: {', '.join(cols1 - cols2)}.")
+            if cols2 - cols1:
+                out.append(f"Columns only in second: {', '.join(cols2 - cols1)}.")
+            common = [c for c in df1.select_dtypes(include="number").columns if c in df2.select_dtypes(include="number").columns]
+            for col in common:
+                m1, m2 = df1[col].mean(), df2[col].mean()
+                if m1 == 0:
+                    continue
+                pct = round((m2 - m1) / abs(m1) * 100, 1)
+                if abs(pct) >= 10:
+                    d = "increased" if pct > 0 else "decreased"
+                    out.append(f"'{col}': mean {d} from {round(m1,2)} to {round(m2,2)} ({pct:+.1f}%).")
+            n1 = df1.isnull().sum().sum() / (df1.shape[0] * df1.shape[1]) * 100
+            n2 = df2.isnull().sum().sum() / (df2.shape[0] * df2.shape[1]) * 100
+            dn = round(n2 - n1, 1)
+            if abs(dn) >= 5:
+                d = "more" if dn > 0 else "fewer"
+                out.append(f"⚠  Second dataset has {abs(dn)}% {d} null values.")
+                out.append("     → Possible data quality degradation.")
+            drift = []
+            for col in common:
+                s1, s2 = df1[col].std(), df2[col].std()
+                if s1 == 0:
+                    continue
+                if abs(s2 - s1) / s1 * 100 >= 30:
+                    drift.append(col)
+            if drift:
+                out.append(f"⚠  Possible data drift in: {', '.join(drift)}.")
+                out.append("     → Dispersion changed over 30%. Review before production.")
+        return "\n".join(out)
