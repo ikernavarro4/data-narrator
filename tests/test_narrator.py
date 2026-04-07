@@ -248,3 +248,26 @@ def test_compare_english(df_basic):
     n = Narrator(df_basic, lang="en")
     result = n.compare(df2)
     assert "comparison" in result
+# ------------------------------------------------------------------
+# Tests de suggest()
+# ------------------------------------------------------------------
+
+def test_suggest_returns_string(df_basic):
+    n = Narrator(df_basic)
+    result = n.suggest()
+    assert isinstance(result, str)
+
+def test_suggest_not_empty(df_basic):
+    n = Narrator(df_basic)
+    result = n.suggest()
+    assert len(result) > 0
+
+def test_suggest_english(df_basic):
+    n = Narrator(df_basic, lang="en")
+    result = n.suggest()
+    assert "suggestions" in result.lower()
+
+def test_suggest_numeric_only(df_numeric_only):
+    n = Narrator(df_numeric_only)
+    result = n.suggest()
+    assert isinstance(result, str)

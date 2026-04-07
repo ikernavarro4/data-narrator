@@ -197,6 +197,108 @@ class Narrator:
                 out.append("     → Dispersion changed over 30%. Review before production.")
         return "\n".join(out)
 
+    def suggest(self) -> str:
+        """Sugiere modelos y preprocesamiento basándose en el análisis del dataset."""
+        ov = self._data["overview"]
+        alerts = self._data["alerts"]
+        numeric = self._data["numeric"]
+        categorical = self._data["categorical"]
+        out = []
+
+        if self.lang == "es":
+            out.append("--- Sugerencias para modelado ---")
+            binary_cols = [c for c in numeric if c["min"] == 0 and c["max"] == 1 and c["mean"] < 1]
+            if binary_cols:
+                out.append(f"Tipo de problema detectado: clasificacion binaria")
+                out.append(f"Variable objetivo probable: {binary_cols[0]['col']}")
+                out.append("")
+                out.append("Modelos recomendados:")
+                out.append("  → Logistic Regression — buen baseline para clasificacion")
+                out.append("  → Random Forest — robusto con variables mixtas")
+                out.append("  → XGBoost — recomendado si priorizas accuracy")
+            elif len(ov["numeric_cols"]) > len(ov["categorical_cols"]):
+                out.append("Tipo de problema detectado: posible regresion")
+                out.append("")
+                out.append("Modelos recomendados:")
+                out.append("  → Linear Regression — baseline simple")
+                out.append("  → Random Forest Regressor — robusto con outliers")
+                out.append("  → Gradient Boosting — para mayor precision")
+            else:
+                out.append("Tipo de problema: clustering o clasificacion multiclase")
+                out.append("")
+                out.append("Modelos recomendados:")
+                out.append("  → KMeans — si no tienes variable objetivo")
+                out.append("  → Random Forest Classifier — si tienes etiquetas")
+            high_card = [a["col"] for a in alerts if a["type"] == "high_cardinality"]
+            constant = [a["col"] for a in alerts if a["type"] == "constant_column"]
+            if high_card:
+                out.append("")
+                out.append(f"Columnas a excluir o tratar: {', '.join(high_card)}")
+                out.append("  → Alta cardinalidad, usa target encoding o eliminalas")
+            if constant:
+                out.append(f"Columnas a eliminar: {', '.join(constant)}")
+                out.append("  → Sin varianza, no aportan informacion al modelo")
+            out.append("")
+            out.append("Preprocesamiento recomendado:")
+            null_cols = [c["col"] for c in numeric if c["nulls"] > 0]
+            if null_cols:
+                out.append(f"  → Imputar nulos en: {', '.join(null_cols)}")
+            skewed = [c["col"] for c in numeric if abs(c["skew"]) > 1]
+            if skewed:
+                out.append(f"  → Aplicar log transform en: {', '.join(skewed)} (sesgo alto)")
+            outlier_cols = [c["col"] for c in numeric if c["outlier_count"] > 0]
+            if outlier_cols:
+                out.append(f"  → Revisar outliers en: {', '.join(outlier_cols)}")
+            if ov["categorical_cols"]:
+                out.append(f"  → Encodear variables categoricas: {', '.join(ov['categorical_cols'])}")
+        else:
+            out.append("--- Modeling suggestions ---")
+            binary_cols = [c for c in numeric if c["min"] == 0 and c["max"] == 1 and c["mean"] < 1]
+            if binary_cols:
+                out.append(f"Detected problem type: binary classification")
+                out.append(f"Likely target variable: {binary_cols[0]['col']}")
+                out.append("")
+                out.append("Recommended models:")
+                out.append("  → Logistic Regression — good baseline")
+                out.append("  → Random Forest — robust with mixed features")
+                out.append("  → XGBoost — recommended for higher accuracy")
+            elif len(ov["numeric_cols"]) > len(ov["categorical_cols"]):
+                out.append("Detected problem type: possible regression")
+                out.append("")
+                out.append("Recommended models:")
+                out.append("  → Linear Regression — simple baseline")
+                out.append("  → Random Forest Regressor — robust with outliers")
+                out.append("  → Gradient Boosting — for higher precision")
+            else:
+                out.append("Problem type: clustering or multiclass classification")
+                out.append("")
+                out.append("Recommended models:")
+                out.append("  → KMeans — if no target variable")
+                out.append("  → Random Forest Classifier — if labels available")
+            high_card = [a["col"] for a in alerts if a["type"] == "high_cardinality"]
+            constant = [a["col"] for a in alerts if a["type"] == "constant_column"]
+            if high_card:
+                out.append("")
+                out.append(f"Columns to exclude or treat: {', '.join(high_card)}")
+                out.append("  → High cardinality, use target encoding or drop them")
+            if constant:
+                out.append(f"Columns to drop: {', '.join(constant)}")
+                out.append("  → No variance, no information for the model")
+            out.append("")
+            out.append("Recommended preprocessing:")
+            null_cols = [c["col"] for c in numeric if c["nulls"] > 0]
+            if null_cols:
+                out.append(f"  → Impute nulls in: {', '.join(null_cols)}")
+            skewed = [c["col"] for c in numeric if abs(c["skew"]) > 1]
+            if skewed:
+                out.append(f"  → Apply log transform to: {', '.join(skewed)} (high skew)")
+            outlier_cols = [c["col"] for c in numeric if c["outlier_count"] > 0]
+            if outlier_cols:
+                out.append(f"  → Review outliers in: {', '.join(outlier_cols)}")
+            if ov["categorical_cols"]:
+                out.append(f"  → Encode categorical columns: {', '.join(ov['categorical_cols'])}")
+        return "\n".join(out)
+
     # ------------------------------------------------------------------
     # Secciones internas
     # ------------------------------------------------------------------
