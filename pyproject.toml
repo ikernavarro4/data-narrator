@@ -35,4 +35,5 @@ include = ["datanarrator*"]
 filterwarnings = [
     "ignore::FutureWarning",
     "ignore::DeprecationWarning",
+    "ignore::UserWarning",
 ]

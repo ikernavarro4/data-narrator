@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class DataAnalyzer:
@@ -36,7 +37,7 @@ class DataAnalyzer:
         # Intentar detectar fechas en columnas string
         for col in categorical_cols.copy():
             try:
-                pd.to_datetime(df[col], infer_datetime_format=True)
+                pd.to_datetime(df[col])
                 datetime_cols.append(col)
                 categorical_cols.remove(col)
             except Exception:

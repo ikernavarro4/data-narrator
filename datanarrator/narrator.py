@@ -86,7 +86,19 @@ class Narrator:
         header = "Alertas detectadas:" if self.lang == "es" else "Alerts detected:"
         lines.append(header)
         for a in alerts:
-            lines.append(f"  → {a['message']} {a['suggestion']}")
+            if self.lang == "en":
+                msg = a["message"].replace("registros duplicados detectados", "duplicate rows detected")
+                msg = msg.replace("tiene", "has")
+                msg = msg.replace("valores nulos", "null values")
+                msg = msg.replace("valores únicos", "unique values")
+                sug = a["suggestion"].replace("Considera imputar o eliminar esta columna", "Consider imputing or dropping this column")
+                sug = sug.replace("Evita label encoding directo. Considera target encoding", "Avoid direct label encoding. Consider target encoding")
+                sug = sug.replace("Considera eliminarlos antes de modelar", "Consider dropping them before modeling")
+                sug = sug.replace("Esta columna no aporta información. Considera eliminarla", "This column has no information. Consider dropping it")
+            else:
+                msg = a["message"]
+                sug = a["suggestion"]
+            lines.append(f"  → {msg} {sug}")
         return "\n".join(lines)
 
     def export(self, filepath: str) -> None:
@@ -299,10 +311,24 @@ class Narrator:
     def _section_alerts(self) -> str:
         alerts = self._data["alerts"]
         if not alerts:
-            return ""
+            if self.lang == "es":
+                return "No se detectaron alertas en este dataset."
+            return "No alerts detected in this dataset."
         header = "--- Alertas y recomendaciones ---" if self.lang == "es" else "--- Alerts & recommendations ---"
         lines = [header]
         for a in alerts:
-            lines.append(f"  ⚠  {a['message']}")
-            lines.append(f"     → {a['suggestion']}")
+            if self.lang == "en":
+                msg = a["message"].replace("registros duplicados detectados", "duplicate rows detected")
+                msg = msg.replace("tiene", "has")
+                msg = msg.replace("valores nulos", "null values")
+                msg = msg.replace("valores únicos", "unique values")
+                sug = a["suggestion"].replace("Considera imputar o eliminar esta columna", "Consider imputing or dropping this column")
+                sug = sug.replace("Evita label encoding directo. Considera target encoding", "Avoid direct label encoding. Consider target encoding")
+                sug = sug.replace("Considera eliminarlos antes de modelar", "Consider dropping them before modeling")
+                sug = sug.replace("Esta columna no aporta información. Considera eliminarla", "This column has no information. Consider dropping it")
+            else:
+                msg = a["message"]
+                sug = a["suggestion"]
+            lines.append(f"  ⚠  {msg}")
+            lines.append(f"     → {sug}")
         return "\n".join(lines)
