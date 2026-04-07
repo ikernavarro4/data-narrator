@@ -1,0 +1,4 @@
+services:
+  datanarrator:
+    build: .
+    container_name: datanarrator-demo
