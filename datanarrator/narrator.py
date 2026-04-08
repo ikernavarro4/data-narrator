@@ -4,20 +4,55 @@ from datanarrator.analyzer import DataAnalyzer
 
 
 class Narrator:
-    """
-    Convierte un DataFrame de pandas en un análisis en lenguaje natural.
+    """Convierte un DataFrame de pandas en un análisis en lenguaje natural.
 
-    Ejemplo:
-        >>> from datanarrator import Narrator
-        >>> import pandas as pd
-        >>> df = pd.read_csv("titanic.csv")
-        >>> n = Narrator(df, lang="es")
-        >>> print(n.describe())
+    En lugar de leer tablas de números, obtienes texto interpretado
+    con hallazgos, alertas y recomendaciones automáticas. Útil para
+    exploración rápida de datos y generación de reportes.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        El DataFrame que se quiere analizar.
+    lang : str, optional
+        Idioma del análisis. Puede ser 'es' (español) o 'en' (inglés).
+        Por defecto es 'es'.
+
+    Raises
+    ------
+    TypeError
+        Si el input no es un DataFrame de pandas.
+    ValueError
+        Si el idioma no está soportado o el DataFrame está vacío.
+
+    Examples
+    --------
+    >>> from datanarrator import Narrator
+    >>> import pandas as pd
+    >>> df = pd.read_csv("titanic.csv")
+    >>> n = Narrator(df, lang="es")
+    >>> print(n.describe())
+    >>> print(n.executive_summary())
     """
 
     SUPPORTED_LANGS = ("es", "en")
 
     def __init__(self, df: pd.DataFrame, lang: str = "es"):
+        """Inicializa el Narrator con un DataFrame y un idioma.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            El DataFrame que se quiere analizar.
+        lang : str, optional
+            Idioma del análisis. 'es' para español, 'en' para inglés.
+            Por defecto es 'es'.
+
+        Raises
+        ------
+        ValueError
+            Si el idioma no está en la lista de soportados.
+        """
         if lang not in self.SUPPORTED_LANGS:
             raise ValueError(f"Idioma '{lang}' no soportado. Usa: {self.SUPPORTED_LANGS}")
         self.df = df
@@ -30,7 +65,22 @@ class Narrator:
     # ------------------------------------------------------------------
 
     def describe(self) -> str:
-        """Genera el análisis completo en lenguaje natural."""
+        """Genera el análisis completo en lenguaje natural.
+
+        Combina todas las secciones del análisis en un solo texto:
+        resumen general, columnas numéricas, columnas categóricas,
+        correlaciones y alertas.
+
+        Returns
+        -------
+        str
+            Texto con el análisis completo del DataFrame.
+
+        Examples
+        --------
+        >>> n = Narrator(df, lang="es")
+        >>> print(n.describe())
+        """
         sections = [
             self._section_overview(),
             self._section_numeric(),
@@ -41,7 +91,22 @@ class Narrator:
         return "\n\n".join(s for s in sections if s)
 
     def executive_summary(self) -> str:
-        """Resumen ejecutivo de 2-3 oraciones."""
+        """Genera un resumen ejecutivo del dataset en 2-3 oraciones.
+
+        Útil cuando necesitas una descripción rápida sin entrar
+        en detalles. Incluye el tamaño del dataset, porcentaje
+        de nulos y la correlación más fuerte detectada.
+
+        Returns
+        -------
+        str
+            Resumen ejecutivo en una o dos oraciones.
+
+        Examples
+        --------
+        >>> n = Narrator(df, lang="es")
+        >>> print(n.executive_summary())
+        """
         ov = self._data["overview"]
         parts = []
 
@@ -75,7 +140,23 @@ class Narrator:
         return " ".join(parts)
 
     def alerts_only(self) -> str:
-        """Devuelve solo las alertas y recomendaciones detectadas."""
+        """Devuelve solo las alertas y recomendaciones del dataset.
+
+        Útil cuando solo te interesa saber qué problemas tiene
+        el dataset antes de modelar. Detecta nulos, duplicados,
+        alta cardinalidad y columnas sin varianza.
+
+        Returns
+        -------
+        str
+            Texto con las alertas detectadas y sugerencias.
+            Si no hay alertas, lo indica explícitamente.
+
+        Examples
+        --------
+        >>> n = Narrator(df, lang="es")
+        >>> print(n.alerts_only())
+        """
         alerts = self._data["alerts"]
         if not alerts:
             if self.lang == "es":
@@ -102,13 +183,57 @@ class Narrator:
         return "\n".join(lines)
 
     def export(self, filepath: str) -> None:
-        """Exporta el análisis completo a un archivo .txt o .md."""
+        """Exporta el análisis completo a un archivo de texto.
+
+        Guarda el resultado de describe() en un archivo .txt o .md.
+        Útil para compartir el análisis o incluirlo en reportes.
+
+        Parameters
+        ----------
+        filepath : str
+            Ruta del archivo donde se guardará el análisis.
+            Se recomienda usar extensión .txt o .md.
+
+        Examples
+        --------
+        >>> n = Narrator(df, lang="es")
+        >>> n.export("reporte.md")
+        """
         content = self.describe()
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"Análisis exportado a: {filepath}")
 
     def compare(self, df2):
+        """Compara el DataFrame original con un segundo DataFrame.
+
+        Detecta diferencias en tamaño, columnas, distribuciones
+        y posible data drift entre dos datasets. Útil para comparar
+        datos de entrenamiento vs producción.
+
+        Parameters
+        ----------
+        df2 : pd.DataFrame
+            El segundo DataFrame con el que se quiere comparar.
+
+        Returns
+        -------
+        str
+            Texto describiendo las diferencias encontradas entre
+            ambos datasets, incluyendo alertas de data drift.
+
+        Raises
+        ------
+        TypeError
+            Si df2 no es un DataFrame de pandas.
+        ValueError
+            Si df2 está vacío.
+
+        Examples
+        --------
+        >>> n = Narrator(df_train, lang="es")
+        >>> print(n.compare(df_produccion))
+        """
         if not isinstance(df2, __import__('pandas').DataFrame):
             raise TypeError("El input debe ser un DataFrame de pandas.")
         if df2.empty:
@@ -198,7 +323,22 @@ class Narrator:
         return "\n".join(out)
 
     def suggest(self) -> str:
-        """Sugiere modelos y preprocesamiento basándose en el análisis del dataset."""
+        """Sugiere modelos de ML y pasos de preprocesamiento.
+
+        Basándose en las características del dataset detecta el
+        tipo de problema (clasificación, regresión o clustering)
+        y recomienda modelos y transformaciones adecuadas.
+
+        Returns
+        -------
+        str
+            Texto con sugerencias de modelos y preprocesamiento.
+
+        Examples
+        --------
+        >>> n = Narrator(df, lang="es")
+        >>> print(n.suggest())
+        """
         ov = self._data["overview"]
         alerts = self._data["alerts"]
         numeric = self._data["numeric"]

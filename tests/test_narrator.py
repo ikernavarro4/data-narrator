@@ -1,3 +1,14 @@
+"""
+Tests para la librería datanarrator.
+
+Cubre todos los métodos públicos de la clase Narrator:
+describe(), executive_summary(), alerts_only(), export(),
+compare() y suggest(). También prueba el DataAnalyzer interno.
+
+Para correr los tests:
+    pytest tests/ -v
+"""
+
 import pytest
 import pandas as pd
 import numpy as np

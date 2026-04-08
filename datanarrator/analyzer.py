@@ -6,9 +6,48 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class DataAnalyzer:
-    """Analiza un DataFrame y extrae estadísticas relevantes."""
+    """Analiza un DataFrame y extrae estadísticas relevantes.
+
+    Esta clase es el motor interno de datanarrator. Recibe un
+    DataFrame de pandas y calcula todo lo necesario para que
+    el Narrator pueda generar texto descriptivo.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        El DataFrame que se quiere analizar. No puede estar vacío.
+
+    Raises
+    ------
+    TypeError
+        Si el input no es un DataFrame de pandas.
+    ValueError
+        Si el DataFrame está vacío.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from datanarrator.analyzer import DataAnalyzer
+    >>> df = pd.DataFrame({"edad": [25, 30, 35], "ciudad": ["cdmx", "mty", "gdl"]})
+    >>> analyzer = DataAnalyzer(df)
+    >>> results = analyzer.analyze()
+    """
 
     def __init__(self, df: pd.DataFrame):
+        """Inicializa el analizador con un DataFrame de pandas.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            El DataFrame que se quiere analizar.
+
+        Raises
+        ------
+        TypeError
+            Si el input no es un DataFrame de pandas.
+        ValueError
+            Si el DataFrame está vacío.
+        """
         if not isinstance(df, pd.DataFrame):
             raise TypeError("El input debe ser un DataFrame de pandas.")
         if df.empty:
@@ -17,7 +56,23 @@ class DataAnalyzer:
         self._results = None
 
     def analyze(self) -> dict:
-        """Corre el análisis completo y devuelve un diccionario con los resultados."""
+        """Corre el análisis completo del DataFrame.
+
+        Ejecuta todos los sub-análisis internos y los agrupa
+        en un solo diccionario. Este es el método principal
+        que usa el Narrator para generar el texto.
+
+        Returns
+        -------
+        dict
+            Diccionario con las siguientes secciones:
+            - overview: resumen general del dataset
+            - numeric: estadísticas de columnas numéricas
+            - categorical: estadísticas de columnas categóricas
+            - datetime: estadísticas de columnas de fecha
+            - correlations: pares de columnas correlacionadas
+            - alerts: problemas detectados en el dataset
+        """
         self._results = {
             "overview": self._overview(),
             "numeric": self._analyze_numeric(),
@@ -29,6 +84,17 @@ class DataAnalyzer:
         return self._results
 
     def _overview(self) -> dict:
+        """Genera un resumen general del DataFrame.
+
+        Cuenta filas, columnas, nulos, duplicados y memoria.
+        También intenta detectar columnas de fecha que vengan
+        como texto.
+
+        Returns
+        -------
+        dict
+            Diccionario con métricas generales del dataset.
+        """
         df = self.df
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
@@ -59,6 +125,17 @@ class DataAnalyzer:
         }
 
     def _analyze_numeric(self) -> list:
+        """Calcula estadísticas para cada columna numérica.
+
+        Para cada columna calcula media, mediana, desviación
+        estándar, rango, nulos, sesgo y outliers usando el
+        método IQR (rango intercuartílico).
+
+        Returns
+        -------
+        list
+            Lista de diccionarios, uno por columna numérica.
+        """
         results = []
         numeric_cols = self.df.select_dtypes(include="number").columns
         for col in numeric_cols:
@@ -84,6 +161,17 @@ class DataAnalyzer:
         return results
 
     def _analyze_categorical(self) -> list:
+        """Calcula estadísticas para cada columna categórica.
+
+        Para cada columna obtiene el número de valores únicos,
+        el valor más frecuente y el porcentaje de nulos.
+        También detecta columnas con alta cardinalidad.
+
+        Returns
+        -------
+        list
+            Lista de diccionarios, uno por columna categórica.
+        """
         results = []
         cat_cols = self.df.select_dtypes(include=["object", "category"]).columns
         for col in cat_cols:
@@ -102,6 +190,16 @@ class DataAnalyzer:
         return results
 
     def _analyze_datetime(self) -> list:
+        """Calcula estadísticas para columnas de fecha.
+
+        Para cada columna de tipo datetime obtiene la fecha
+        mínima, máxima y el rango total en días.
+
+        Returns
+        -------
+        list
+            Lista de diccionarios, uno por columna de fecha.
+        """
         results = []
         dt_cols = self.df.select_dtypes(include=["datetime"]).columns
         for col in dt_cols:
@@ -118,6 +216,18 @@ class DataAnalyzer:
         return results
 
     def _correlations(self) -> list:
+        """Detecta pares de columnas con correlación significativa.
+
+        Solo reporta correlaciones con valor absoluto mayor o
+        igual a 0.5. Las clasifica como moderadas (0.5-0.75)
+        o altas (mayor a 0.75).
+
+        Returns
+        -------
+        list
+            Lista de pares de columnas correlacionadas,
+            ordenada de mayor a menor correlación absoluta.
+        """
         numeric = self.df.select_dtypes(include="number")
         if numeric.shape[1] < 2:
             return []
@@ -139,6 +249,20 @@ class DataAnalyzer:
         return pairs
 
     def _alerts(self) -> list:
+        """Detecta problemas comunes en el dataset.
+
+        Revisa cuatro tipos de problemas:
+        - Registros duplicados
+        - Columnas con más del 20% de nulos
+        - Columnas categóricas con alta cardinalidad (más de 50 valores)
+        - Columnas con un solo valor único (sin varianza)
+
+        Returns
+        -------
+        list
+            Lista de diccionarios con el tipo de alerta,
+            mensaje y sugerencia de solución.
+        """
         alerts = []
         df = self.df
 
