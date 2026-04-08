@@ -1,3 +1,14 @@
+"""
+Módulo de análisis estadístico para datanarrator.
+
+Contiene la clase DataAnalyzer, que es el motor interno de la
+librería. Se encarga de extraer estadísticas de un DataFrame
+de pandas para que el Narrator pueda generar texto descriptivo.
+
+No se recomienda usar esta clase directamente. En su lugar
+usa la clase Narrator que es la interfaz pública.
+"""
+
 import pandas as pd
 import numpy as np
 import warnings

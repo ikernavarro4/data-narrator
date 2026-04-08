@@ -1,3 +1,19 @@
+"""
+Módulo principal de datanarrator.
+
+Contiene la clase Narrator, que es la interfaz pública de la
+librería. Recibe un DataFrame de pandas y genera texto descriptivo
+usando el DataAnalyzer como motor interno.
+
+Uso básico
+----------
+>>> from datanarrator import Narrator
+>>> import pandas as pd
+>>> df = pd.read_csv("datos.csv")
+>>> n = Narrator(df, lang="es")
+>>> print(n.describe())
+"""
+
 from __future__ import annotations
 import pandas as pd
 from datanarrator.analyzer import DataAnalyzer
@@ -275,6 +291,7 @@ class Narrator:
                 s1, s2 = df1[col].std(), df2[col].std()
                 if s1 == 0:
                     continue
+                # Si la desviación estándar cambió más del 30% consideramos que hay drift
                 if abs(s2 - s1) / s1 * 100 >= 30:
                     drift.append(col)
             if drift:
@@ -315,6 +332,7 @@ class Narrator:
                 s1, s2 = df1[col].std(), df2[col].std()
                 if s1 == 0:
                     continue
+                # Si la desviación estándar cambió más del 30% consideramos que hay drift
                 if abs(s2 - s1) / s1 * 100 >= 30:
                     drift.append(col)
             if drift:
@@ -347,6 +365,7 @@ class Narrator:
 
         if self.lang == "es":
             out.append("--- Sugerencias para modelado ---")
+            # Detectamos clasificación binaria: columna con valores 0 y 1 únicamente
             binary_cols = [c for c in numeric if c["min"] == 0 and c["max"] == 1 and c["mean"] < 1]
             if binary_cols:
                 out.append(f"Tipo de problema detectado: clasificacion binaria")
@@ -393,6 +412,7 @@ class Narrator:
                 out.append(f"  → Encodear variables categoricas: {', '.join(ov['categorical_cols'])}")
         else:
             out.append("--- Modeling suggestions ---")
+            # Detectamos clasificación binaria: columna con valores 0 y 1 únicamente
             binary_cols = [c for c in numeric if c["min"] == 0 and c["max"] == 1 and c["mean"] < 1]
             if binary_cols:
                 out.append(f"Detected problem type: binary classification")
@@ -444,6 +464,7 @@ class Narrator:
     # ------------------------------------------------------------------
 
     def _section_overview(self) -> str:
+        # Obtenemos el resumen general calculado por el analyzer
         ov = self._data["overview"]
         if self.lang == "es":
             lines = [
@@ -476,6 +497,7 @@ class Narrator:
         return "\n".join(lines)
 
     def _section_numeric(self) -> str:
+        # Si no hay columnas numéricas no generamos esta sección
         cols = self._data["numeric"]
         if not cols:
             return ""
@@ -510,6 +532,7 @@ class Narrator:
         return "\n".join(lines)
 
     def _section_categorical(self) -> str:
+        # Si no hay columnas categóricas no generamos esta sección
         cols = self._data["categorical"]
         if not cols:
             return ""
@@ -534,6 +557,7 @@ class Narrator:
         return "\n".join(lines)
 
     def _section_correlations(self) -> str:
+        # Solo mostramos correlaciones si el analyzer encontró alguna >= 0.5
         corrs = self._data["correlations"]
         if not corrs:
             return ""
