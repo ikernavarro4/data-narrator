@@ -1,6 +1,6 @@
 # datanarrator 📊
 
-[![PyPI version](https://badge.shields.io/pypi/datanarrator.svg)](https://pypi.org/project/datanarrator/)
+[![PyPI version](https://img.shields.io/pypi/v/datanarrator)](https://pypi.org/project/datanarrator/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
