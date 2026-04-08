@@ -51,16 +51,44 @@ n = Narrator(df, lang="es")
 print(n.describe())
 ```
 
+--- Resumen general ---
+El dataset contiene 891 registros con 12 columnas: 7 numéricas, 5 categóricas.
+Valores nulos: 866 (8.1% del total).
+--- Columnas numéricas ---
+Age: media=29.7, mediana=28.0, std=14.53. Se detectaron 11 posibles outliers.
+--- Correlaciones relevantes ---
+Pclass ↔ Fare: correlación moderada negativa (-0.55)
+--- Alertas y recomendaciones ---
+⚠  'Cabin' tiene 77.1% de valores nulos.
+→ Considera imputar o eliminar esta columna.
+
 ### Sugerencias de modelado
 ```python
 print(n.suggest())
 ```
+
+--- Sugerencias para modelado ---
+Tipo de problema detectado: clasificacion binaria
+Variable objetivo probable: Survived
+Modelos recomendados:
+→ Logistic Regression — buen baseline para clasificacion
+→ Random Forest — robusto con variables mixtas
+→ XGBoost — recomendado si priorizas accuracy
+Preprocesamiento recomendado:
+→ Imputar nulos en: Age
+→ Encodear variables categoricas: Name, Sex, Ticket, Cabin, Embarked
 
 ### Comparar dos datasets
 ```python
 n = Narrator(df_train, lang="es")
 print(n.compare(df_produccion))
 ```
+
+--- Comparación de datasets ---
+El segundo dataset tiene 267 registros menos.
+'Age': media subió de 29.7 a 44.34 (+49.3%).
+⚠  Posible data drift en: Age.
+→ Dispersión cambió más del 30%. Revisa antes de producción.
 
 ### Soporte multilenguaje
 ```python
