@@ -49,7 +49,9 @@ print(n.describe())
 ```python
 n = Narrator(df, lang="es")
 print(n.describe())
+```
 
+```
 --- Resumen general ---
 El dataset contiene 891 registros con 12 columnas: 7 numéricas, 5 categóricas.
 Valores nulos: 866 (8.1% del total).
@@ -65,7 +67,9 @@ Pclass ↔ Fare: correlación moderada negativa (-0.55)
 ### Sugerencias de modelado
 ```python
 print(n.suggest())
+```
 
+```
 --- Sugerencias para modelado ---
 Tipo de problema detectado: clasificacion binaria
 Variable objetivo probable: Survived
@@ -82,7 +86,9 @@ Preprocesamiento recomendado:
 ```python
 n = Narrator(df_train, lang="es")
 print(n.compare(df_produccion))
+```
 
+```
 --- Comparación de datasets ---
 El segundo dataset tiene 267 registros menos.
 'Age': media subió de 29.7 a 44.34 (+49.3%).
