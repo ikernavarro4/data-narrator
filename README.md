@@ -49,7 +49,6 @@ print(n.describe())
 ```python
 n = Narrator(df, lang="es")
 print(n.describe())
-```
 
 --- Resumen general ---
 El dataset contiene 891 registros con 12 columnas: 7 numéricas, 5 categóricas.
@@ -61,11 +60,11 @@ Pclass ↔ Fare: correlación moderada negativa (-0.55)
 --- Alertas y recomendaciones ---
 ⚠  'Cabin' tiene 77.1% de valores nulos.
 → Considera imputar o eliminar esta columna.
+```
 
 ### Sugerencias de modelado
 ```python
 print(n.suggest())
-```
 
 --- Sugerencias para modelado ---
 Tipo de problema detectado: clasificacion binaria
@@ -77,18 +76,19 @@ Modelos recomendados:
 Preprocesamiento recomendado:
 → Imputar nulos en: Age
 → Encodear variables categoricas: Name, Sex, Ticket, Cabin, Embarked
+```
 
 ### Comparar dos datasets
 ```python
 n = Narrator(df_train, lang="es")
 print(n.compare(df_produccion))
-```
 
 --- Comparación de datasets ---
 El segundo dataset tiene 267 registros menos.
 'Age': media subió de 29.7 a 44.34 (+49.3%).
 ⚠  Posible data drift en: Age.
 → Dispersión cambió más del 30%. Revisa antes de producción.
+```
 
 ### Soporte multilenguaje
 ```python
