@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
-  { name = "Tu Nombre", email = "tu@email.com" }
+  { name = "Iker Navarro", email = "tu@email.com" }
 ]
 keywords = ["data science", "eda", "nlg", "pandas", "analysis"]
 classifiers = [
