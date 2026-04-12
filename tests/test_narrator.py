@@ -282,3 +282,153 @@ def test_suggest_numeric_only(df_numeric_only):
     n = Narrator(df_numeric_only)
     result = n.suggest()
     assert isinstance(result, str)
+
+# -----------------------------------------------------------------------
+# Tests de quality_score()
+# -----------------------------------------------------------------------
+
+def test_quality_score_returns_dict(df_basic):
+    """Verifica que quality_score() retorna un diccionario."""
+    n = Narrator(df_basic, lang="es")
+    result = n.quality_score()
+    assert isinstance(result, dict)
+
+
+def test_quality_score_keys(df_basic):
+    """Verifica que el diccionario tiene todas las claves esperadas."""
+    n = Narrator(df_basic, lang="es")
+    result = n.quality_score()
+    assert "score" in result
+    assert "grade" in result
+    assert "resumen" in result
+    assert "penalizaciones" in result
+
+
+def test_quality_score_range(df_basic):
+    """Verifica que el score está entre 0 y 100."""
+    n = Narrator(df_basic, lang="es")
+    result = n.quality_score()
+    assert 0 <= result["score"] <= 100
+
+
+def test_quality_score_grade_valid(df_basic):
+    """Verifica que el grado es uno de los valores válidos."""
+    n = Narrator(df_basic, lang="es")
+    result = n.quality_score()
+    assert result["grade"] in ("A", "B", "C", "D", "F")
+
+
+def test_quality_score_clean_dataset(df_numeric_only):
+    """Un dataset limpio sin nulos ni duplicados debe tener score alto."""
+    n = Narrator(df_numeric_only, lang="es")
+    result = n.quality_score()
+    assert result["score"] >= 80
+
+
+def test_quality_score_dirty_dataset(df_with_nulls, df_numeric_only):
+    """Un dataset con muchos nulos debe tener score más bajo."""
+    n_clean = Narrator(df_numeric_only, lang="es")
+    n_dirty = Narrator(df_with_nulls, lang="es")
+    assert n_dirty.quality_score()["score"] <= n_clean.quality_score()["score"]
+
+
+def test_quality_score_english(df_basic):
+    """Verifica que el resumen en inglés no contiene palabras en español."""
+    n = Narrator(df_basic, lang="en")
+    result = n.quality_score()
+    assert "scored" in result["resumen"]
+    assert "grade" in result["resumen"]
+
+
+def test_quality_score_spanish(df_basic):
+    """Verifica que el resumen en español contiene las palabras correctas."""
+    n = Narrator(df_basic, lang="es")
+    result = n.quality_score()
+    assert "score" in result["resumen"]
+    assert "grado" in result["resumen"]
+
+
+def test_quality_score_penalizaciones_keys(df_basic):
+    """Verifica que el desglose de penalizaciones tiene todas las claves."""
+    n = Narrator(df_basic, lang="es")
+    pen = n.quality_score()["penalizaciones"]
+    assert "nulos" in pen
+    assert "duplicados" in pen
+    assert "constantes" in pen
+    assert "cardinalidad" in pen
+    assert "cols_nulas" in pen
+
+
+# -----------------------------------------------------------------------
+# Tests de _translate_alert()
+# -----------------------------------------------------------------------
+
+def test_translate_alert_spanish_returns_original(df_basic):
+    """En español debe retornar el mensaje original sin cambios."""
+    n = Narrator(df_basic, lang="es")
+    alert = {
+        "type": "high_nulls",
+        "col": "edad",
+        "message": "'edad' tiene 30.0% de valores nulos.",
+        "suggestion": "Considera imputar o eliminar esta columna.",
+    }
+    msg, sug = n._translate_alert(alert)
+    assert msg == alert["message"]
+    assert sug == alert["suggestion"]
+
+
+def test_translate_alert_english_high_nulls(df_basic):
+    """Verifica traducción correcta de alerta high_nulls al inglés."""
+    n = Narrator(df_basic, lang="en")
+    alert = {
+        "type": "high_nulls",
+        "col": "edad",
+        "message": "'edad' tiene 30.0% de valores nulos.",
+        "suggestion": "Considera imputar o eliminar esta columna.",
+    }
+    msg, sug = n._translate_alert(alert)
+    assert "edad" in msg
+    assert "null values" in msg
+    assert "imputing" in sug
+
+
+def test_translate_alert_english_duplicates(df_basic):
+    """Verifica traducción correcta de alerta duplicates al inglés."""
+    n = Narrator(df_basic, lang="en")
+    alert = {
+        "type": "duplicates",
+        "message": "5 registros duplicados detectados.",
+        "suggestion": "Considera eliminarlos antes de modelar.",
+    }
+    msg, sug = n._translate_alert(alert)
+    assert "duplicate" in msg
+    assert "modeling" in sug
+
+
+def test_translate_alert_english_constant_column(df_basic):
+    """Verifica traducción correcta de alerta constant_column al inglés."""
+    n = Narrator(df_basic, lang="en")
+    alert = {
+        "type": "constant_column",
+        "col": "pais",
+        "message": "'pais' tiene un solo valor único.",
+        "suggestion": "Esta columna no aporta información. Considera eliminarla.",
+    }
+    msg, sug = n._translate_alert(alert)
+    assert "pais" in msg
+    assert "dropping" in sug
+
+
+def test_translate_alert_english_high_cardinality(df_basic):
+    """Verifica traducción correcta de alerta high_cardinality al inglés."""
+    n = Narrator(df_basic, lang="en")
+    alert = {
+        "type": "high_cardinality",
+        "col": "nombre",
+        "message": "'nombre' tiene 500 valores únicos.",
+        "suggestion": "Evita label encoding directo. Considera target encoding.",
+    }
+    msg, sug = n._translate_alert(alert)
+    assert "nombre" in msg
+    assert "unique values" in msg
+    assert "target encoding" in sug

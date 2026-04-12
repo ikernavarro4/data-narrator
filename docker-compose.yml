@@ -2,3 +2,6 @@ services:
   datanarrator:
     build: .
     container_name: datanarrator-demo
+    restart: "no"
+    volumes:
+      - ./examples:/app/examples

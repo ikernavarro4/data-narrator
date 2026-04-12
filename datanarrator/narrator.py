@@ -182,19 +182,10 @@ class Narrator:
         lines = []
         header = "Alertas detectadas:" if self.lang == "es" else "Alerts detected:"
         lines.append(header)
+	# Usamos _translate_alert() para centralizar la traducción
+        # en lugar de duplicar la lógica de str.replace() aquí
         for a in alerts:
-            if self.lang == "en":
-                msg = a["message"].replace("registros duplicados detectados", "duplicate rows detected")
-                msg = msg.replace("tiene", "has")
-                msg = msg.replace("valores nulos", "null values")
-                msg = msg.replace("valores únicos", "unique values")
-                sug = a["suggestion"].replace("Considera imputar o eliminar esta columna", "Consider imputing or dropping this column")
-                sug = sug.replace("Evita label encoding directo. Considera target encoding", "Avoid direct label encoding. Consider target encoding")
-                sug = sug.replace("Considera eliminarlos antes de modelar", "Consider dropping them before modeling")
-                sug = sug.replace("Esta columna no aporta información. Considera eliminarla", "This column has no information. Consider dropping it")
-            else:
-                msg = a["message"]
-                sug = a["suggestion"]
+            msg, sug = self._translate_alert(a)
             lines.append(f"  → {msg} {sug}")
         return "\n".join(lines)
 
@@ -340,6 +331,125 @@ class Narrator:
                 out.append("     → Dispersion changed over 30%. Review before production.")
         return "\n".join(out)
 
+    def quality_score(self) -> dict:
+        """Calcula un score de calidad del dataset de 0 a 100.
+
+        Evalúa la salud general del dataset penalizando por distintos
+        tipos de problemas detectados por el DataAnalyzer. El score
+        es útil para comparar datasets rápidamente o monitorear la
+        degradación de calidad en producción.
+
+        El score parte de 100 y resta puntos según estos criterios:
+
+        - Nulos globales: hasta 30 puntos (1.5 puntos por cada 1%)
+        - Duplicados: hasta 20 puntos (2 puntos por cada 1%)
+        - Columnas constantes: hasta 20 puntos (10 por columna)
+        - Alta cardinalidad: hasta 15 puntos (5 por columna)
+        - Columnas con más del 20% de nulos: hasta 15 puntos (5 por columna)
+
+        La escala de grados es:
+        - A: 90-100 (dataset limpio y listo para modelar)
+        - B: 80-89  (calidad buena, problemas menores)
+        - C: 70-79  (calidad aceptable, requiere limpieza)
+        - D: 60-69  (calidad baja, limpieza importante)
+        - F: 0-59   (dataset con problemas graves)
+
+        Returns
+        -------
+        dict
+            Diccionario con las siguientes claves:
+            - score: int, puntuación de 0 a 100
+            - grade: str, grado de A a F
+            - resumen: str, texto descriptivo del resultado
+            - penalizaciones: dict, desglose de puntos restados
+              por categoría
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> from datanarrator import Narrator
+        >>> df = pd.read_csv("titanic.csv")
+        >>> n = Narrator(df, lang="es")
+        >>> resultado = n.quality_score()
+        >>> print(resultado["resumen"])
+        El dataset obtuvo un score de 72/100 (grado C).
+        >>> print(resultado["penalizaciones"])
+        {'nulos': 12.1, 'duplicados': 0, 'constantes': 0,
+         'cardinalidad': 5, 'cols_nulas': 10}
+        """
+        ov = self._data["overview"]
+        alerts = self._data["alerts"]
+
+        penalizaciones = {}
+
+        # Penalizar por porcentaje global de nulos (máximo 30 puntos).
+        # Multiplicamos por 1.5 para que un dataset con 20% de nulos
+        # ya pierda 30 puntos completos
+        penalizaciones["nulos"] = min(ov["null_pct"] * 1.5, 30)
+
+        # Penalizar por duplicados como porcentaje del total de filas
+        # (máximo 20 puntos)
+        dup_pct = (
+            ov["duplicates"] / ov["rows"] * 100 if ov["rows"] > 0 else 0
+        )
+        penalizaciones["duplicados"] = min(dup_pct * 2, 20)
+
+        # Penalizar por columnas sin varianza — no aportan información
+        # al modelo (10 puntos cada una, máximo 20)
+        constantes = sum(
+            1 for a in alerts if a["type"] == "constant_column"
+        )
+        penalizaciones["constantes"] = min(constantes * 10, 20)
+
+        # Penalizar por columnas con alta cardinalidad — difíciles de
+        # encodear correctamente (5 puntos cada una, máximo 15)
+        cardinalidad = sum(
+            1 for a in alerts if a["type"] == "high_cardinality"
+        )
+        penalizaciones["cardinalidad"] = min(cardinalidad * 5, 15)
+
+        # Penalizar por columnas con más del 20% de nulos — señal de
+        # problemas graves de recolección de datos (5 puntos cada una,
+        # máximo 15)
+        cols_nulas = sum(
+            1 for a in alerts if a["type"] == "high_nulls"
+        )
+        penalizaciones["cols_nulas"] = min(cols_nulas * 5, 15)
+
+        # Calculamos el score final restando todas las penalizaciones
+        # y asegurándonos de que no baje de 0
+        total_penalizacion = sum(penalizaciones.values())
+        score = max(0, round(100 - total_penalizacion))
+
+        # Asignamos grado según la escala estándar de calificaciones
+        if score >= 90:
+            grade = "A"
+        elif score >= 80:
+            grade = "B"
+        elif score >= 70:
+            grade = "C"
+        elif score >= 60:
+            grade = "D"
+        else:
+            grade = "F"
+
+        if self.lang == "es":
+            return {
+                "score": score,
+                "grade": grade,
+                "resumen": (
+                    f"El dataset obtuvo un score de {score}/100 "
+                    f"(grado {grade})."
+                ),
+                "penalizaciones": penalizaciones,
+            }
+        return {
+            "score": score,
+            "grade": grade,
+            "resumen": f"Dataset scored {score}/100 (grade {grade}).",
+            "penalizaciones": penalizaciones,
+        }
+
     def suggest(self) -> str:
         """Sugiere modelos de ML y pasos de preprocesamiento.
 
@@ -463,6 +573,86 @@ class Narrator:
     # Secciones internas
     # ------------------------------------------------------------------
 
+    def _translate_alert(self, alert: dict) -> tuple:
+        """Traduce el mensaje y sugerencia de una alerta al idioma activo.
+
+        Centraliza la lógica de traducción de alertas que antes estaba
+        duplicada en alerts_only() y _section_alerts(). Usa diccionarios
+        de plantillas por tipo de alerta en lugar de str.replace() en
+        cadena, lo que hace la traducción robusta a cambios futuros en
+        los mensajes en español.
+
+        Parameters
+        ----------
+        alert : dict
+            Diccionario de alerta generado por DataAnalyzer._alerts().
+            Debe contener al menos las claves 'type', 'message' y
+            'suggestion'. Las alertas de tipo 'high_nulls',
+            'high_cardinality' y 'constant_column' también requieren
+            la clave 'col'.
+
+        Returns
+        -------
+        tuple
+            Par (mensaje, sugerencia) ya traducidos al idioma activo.
+            Si el idioma es 'es', retorna los valores originales sin
+            modificación. Si es 'en', aplica la plantilla correspondiente
+            al tipo de alerta.
+
+        Examples
+        --------
+        >>> n = Narrator(df, lang="en")
+        >>> alert = {"type": "high_nulls", "col": "age",
+        ...          "message": "'age' tiene 30.0% de valores nulos.",
+        ...          "suggestion": "Considera imputar o eliminar esta columna."}
+        >>> msg, sug = n._translate_alert(alert)
+        >>> print(msg)
+        'age' has 30.0% null values.
+        """
+        # Si el idioma es español devolvemos los valores tal como vienen
+        # del analyzer sin ninguna transformación
+        if self.lang == "es":
+            return alert["message"], alert["suggestion"]
+
+        # Plantillas de mensajes en inglés por tipo de alerta.
+        # Cada lambda extrae los datos necesarios directamente del
+        # diccionario de alerta, evitando depender de la redacción
+        # exacta del mensaje en español
+        MENSAJES = {
+            "duplicates": lambda a: (
+                f"{a['message'].split()[0]} duplicate rows detected."
+            ),
+            "high_nulls": lambda a: (
+                f"'{a['col']}' has {a['message'].split()[2]} null values."
+            ),
+            "high_cardinality": lambda a: (
+                f"'{a['col']}' has {a['message'].split()[2]} unique values."
+            ),
+            "constant_column": lambda a: (
+                f"'{a['col']}' has only one unique value."
+            ),
+        }
+
+        # Plantillas de sugerencias en inglés por tipo de alerta
+        SUGERENCIAS = {
+            "duplicates": "Consider dropping them before modeling.",
+            "high_nulls": "Consider imputing or dropping this column.",
+            "high_cardinality": (
+                "Avoid direct label encoding. Consider target encoding."
+            ),
+            "constant_column": (
+                "This column has no information. Consider dropping it."
+            ),
+        }
+
+        # Aplicamos la plantilla correspondiente al tipo de alerta.
+        # Si el tipo no está en el diccionario, usamos el mensaje
+        # original como fallback para no perder información
+        tipo = alert["type"]
+        msg = MENSAJES.get(tipo, lambda a: a["message"])(alert)
+        sug = SUGERENCIAS.get(tipo, alert["suggestion"])
+        return msg, sug
+
     def _section_overview(self) -> str:
         # Obtenemos el resumen general calculado por el analyzer
         ov = self._data["overview"]
@@ -582,19 +772,9 @@ class Narrator:
             return "No alerts detected in this dataset."
         header = "--- Alertas y recomendaciones ---" if self.lang == "es" else "--- Alerts & recommendations ---"
         lines = [header]
+	# Reutilizamos _translate_alert() para no duplicar
+        # la lógica de traducción entre métodos públicos
         for a in alerts:
-            if self.lang == "en":
-                msg = a["message"].replace("registros duplicados detectados", "duplicate rows detected")
-                msg = msg.replace("tiene", "has")
-                msg = msg.replace("valores nulos", "null values")
-                msg = msg.replace("valores únicos", "unique values")
-                sug = a["suggestion"].replace("Considera imputar o eliminar esta columna", "Consider imputing or dropping this column")
-                sug = sug.replace("Evita label encoding directo. Considera target encoding", "Avoid direct label encoding. Consider target encoding")
-                sug = sug.replace("Considera eliminarlos antes de modelar", "Consider dropping them before modeling")
-                sug = sug.replace("Esta columna no aporta información. Considera eliminarla", "This column has no information. Consider dropping it")
-            else:
-                msg = a["message"]
-                sug = a["suggestion"]
+            msg, sug = self._translate_alert(a)
             lines.append(f"  ⚠  {msg}")
             lines.append(f"     → {sug}")
-        return "\n".join(lines)
