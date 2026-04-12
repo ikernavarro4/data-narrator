@@ -16,5 +16,5 @@ Uso básico
 
 from datanarrator.narrator import Narrator
 
-__version__ = "0.1.3"
+__version__ = "0.1."
 __all__ = ["Narrator"]
