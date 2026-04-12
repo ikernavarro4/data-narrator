@@ -250,7 +250,7 @@ class Narrator:
         >>> n = Narrator(df_train, lang="es")
         >>> print(n.compare(df_produccion))
         """
-        if not isinstance(df2, __import__('pandas').DataFrame):
+        if not isinstance(df2, pd.DataFrame):
             raise TypeError("El input debe ser un DataFrame de pandas.")
         if df2.empty:
             raise ValueError("El segundo DataFrame no puede estar vacío.")
@@ -366,7 +366,7 @@ class Narrator:
         if self.lang == "es":
             out.append("--- Sugerencias para modelado ---")
             # Detectamos clasificación binaria: columna con valores 0 y 1 únicamente
-            binary_cols = [c for c in numeric if c["min"] == 0 and c["max"] == 1 and c["mean"] < 1]
+            binary_cols = [c for c in numeric if set(self.df[c["col"]].dropna().unique()) <= {0, 1}]
             if binary_cols:
                 out.append(f"Tipo de problema detectado: clasificacion binaria")
                 out.append(f"Variable objetivo probable: {binary_cols[0]['col']}")
@@ -413,7 +413,7 @@ class Narrator:
         else:
             out.append("--- Modeling suggestions ---")
             # Detectamos clasificación binaria: columna con valores 0 y 1 únicamente
-            binary_cols = [c for c in numeric if c["min"] == 0 and c["max"] == 1 and c["mean"] < 1]
+            binary_cols = [c for c in numeric if set(self.df[c["col"]].dropna().unique()) <= {0, 1}]
             if binary_cols:
                 out.append(f"Detected problem type: binary classification")
                 out.append(f"Likely target variable: {binary_cols[0]['col']}")
