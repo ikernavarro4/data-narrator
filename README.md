@@ -106,18 +106,24 @@ resultado = n.quality_score()
 print(resultado["resumen"])
 print(resultado["penalizaciones"])
 ```
+
+```
 El dataset obtuvo un score de 72/100 (grado C).
 {'nulos': 12.15, 'duplicados': 0, 'constantes': 0, 'cardinalidad': 0, 'cols_nulas': 10}
+```
 
 ### Análisis narrativo
 
 ```python
 print(n.narrative())
 ```
+
+```
 Con 891 registros y 12 columnas, el dataset es de tamaño moderado — adecuado
 para la mayoría de algoritmos de machine learning. Contiene 7 variables numéricas
 y 5 categóricas. El problema de calidad más crítico es la columna "Cabin", que
 concentra el 77.1% de valores nulos...
+```
 
 ### Exportar reporte HTML interactivo
 
