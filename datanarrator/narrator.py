@@ -509,6 +509,31 @@ class Narrator:
             corr_section = ""
             corr_chart_js = ""
 
+        if null_labels:
+            nulls_chart_js = (
+                'new Chart(document.getElementById("nullsChart"),{'
+                'type:"bar",data:{labels:' + json.dumps(null_labels)
+                + ',datasets:[{label:"% nulls",data:' + json.dumps(null_values)
+                + ',backgroundColor:"#ef4444",borderRadius:4}]},'
+                'options:{responsive:true,maintainAspectRatio:false,'
+                'scales:{y:{beginAtZero:true,max:100}},'
+                'plugins:{legend:{display:false}}}});'
+            )
+        else:
+            nulls_chart_js = ""
+
+        if outlier_labels:
+            outliers_chart_js = (
+                'new Chart(document.getElementById("outliersChart"),{'
+                'type:"bar",data:{labels:' + json.dumps(outlier_labels)
+                + ',datasets:[{label:"Outliers",data:' + json.dumps(outlier_values)
+                + ',backgroundColor:"#f59e0b",borderRadius:4}]},'
+                'options:{responsive:true,maintainAspectRatio:false,'
+                'plugins:{legend:{display:false}}}});'
+            )
+        else:
+            outliers_chart_js = ""
+
         html = f"""<!DOCTYPE html>
 <html lang="{self.lang}">
 <head>
@@ -694,9 +719,9 @@ new Chart(document.getElementById("colTypesChart"),{{
   options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{position:"bottom"}}}}}}
 }});
 
-{"new Chart(document.getElementById(\"nullsChart\"),{type:\"bar\",data:{labels:" + json.dumps(null_labels) + ",datasets:[{label:\"% nulls\",data:" + json.dumps(null_values) + ",backgroundColor:\"#ef4444\",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:100}},plugins:{legend:{display:false}}}});" if null_labels else ""}
+{nulls_chart_js}
 
-{"new Chart(document.getElementById(\"outliersChart\"),{type:\"bar\",data:{labels:" + json.dumps(outlier_labels) + ",datasets:[{label:\"Outliers\",data:" + json.dumps(outlier_values) + ",backgroundColor:\"#f59e0b\",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});" if outlier_labels else ""}
+{outliers_chart_js}
 
 {corr_chart_js}
 </script>
