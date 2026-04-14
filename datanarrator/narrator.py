@@ -218,12 +218,11 @@ class Narrator:
             print(f"Análisis exportado a: {filepath}")
 
     def _export_html(self, filepath: str) -> None:
-        """Genera un reporte HTML con tablas y gráficas embebidas.
+        """Genera un reporte HTML interactivo completo con Chart.js.
 
-        Crea un archivo HTML autocontenido con estilos inline y gráficas
-        en base64, sin dependencias externas. Incluye resumen general,
-        score de calidad, tabla de columnas numéricas, tabla de alertas
-        y gráfica de distribución de nulos por columna.
+        Incluye navegación por secciones, semáforo de salud por columna,
+        gráficas interactivas, histogramas, variables categóricas,
+        sugerencias de ML y exportación a PDF.
 
         Parameters
         ----------
@@ -232,228 +231,443 @@ class Narrator:
         """
         import base64
         import io
+        import json
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
         ov = self._data["overview"]
         numeric = self._data["numeric"]
+        categorical = self._data["categorical"]
         alerts = self._data["alerts"]
+        corrs = self._data["correlations"]
         qs = self.quality_score()
+        narrative_text = self.narrative().replace("\n", "<br>")
+        suggest_text = self.suggest()
 
-        # --- Gráfica de nulos por columna ---
-        # Solo generamos la gráfica si hay columnas con nulos
-        chart_b64 = ""
-        null_data = [(c["col"], c["null_pct"]) for c in numeric if c["nulls"] > 0]
-        if null_data:
-            cols_names = [x[0] for x in null_data]
-            cols_pcts = [x[1] for x in null_data]
-            fig, ax = plt.subplots(figsize=(8, 3))
-            bars = ax.barh(cols_names, cols_pcts, color="#4F46E5")
-            ax.set_xlabel("% nulos" if self.lang == "es" else "% nulls")
-            ax.set_title(
-                "Nulos por columna" if self.lang == "es"
-                else "Nulls per column"
-            )
-            ax.set_xlim(0, 100)
-            # Agregar etiquetas al final de cada barra
-            for bar, pct in zip(bars, cols_pcts):
-                ax.text(
-                    bar.get_width() + 1, bar.get_y() + bar.get_height() / 2,
-                    f"{pct}%", va="center", fontsize=9
-                )
-            plt.tight_layout()
-            buf = io.BytesIO()
-            plt.savefig(buf, format="png", dpi=120)
-            plt.close()
-            buf.seek(0)
-            chart_b64 = base64.b64encode(buf.read()).decode("utf-8")
-
-        # --- Gráfica de score de calidad ---
-        fig2, ax2 = plt.subplots(figsize=(4, 4))
+        # --- Score donut ---
+        fig, ax = plt.subplots(figsize=(3, 3))
         score = qs["score"]
         color = "#22c55e" if score >= 80 else "#f59e0b" if score >= 60 else "#ef4444"
-        ax2.pie(
-            [score, 100 - score],
-            colors=[color, "#e5e7eb"],
-            startangle=90,
-            counterclock=False,
-        )
-        ax2.text(
-            0, 0, f"{score}",
-            ha="center", va="center", fontsize=32, fontweight="bold"
-        )
-        ax2.set_title(
-            f"Quality Score — {qs['grade']}",
-            fontsize=13, pad=12
-        )
+        ax.pie([score, 100 - score], colors=[color, "#e5e7eb"],
+               startangle=90, counterclock=False)
+        ax.text(0, 0, f"{score}", ha="center", va="center",
+                fontsize=28, fontweight="bold", color=color)
         plt.tight_layout()
-        buf2 = io.BytesIO()
-        plt.savefig(buf2, format="png", dpi=120)
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", dpi=120, transparent=True)
         plt.close()
-        buf2.seek(0)
-        score_b64 = base64.b64encode(buf2.read()).decode("utf-8")
+        buf.seek(0)
+        score_b64 = base64.b64encode(buf.read()).decode("utf-8")
 
-        # --- Filas de tabla numérica ---
-        numeric_rows = ""
+        # --- Histogramas por columna numérica (base64) ---
+        hist_b64 = {}
         for c in numeric:
-            numeric_rows += f"""
+            series = self.df[c["col"]].dropna()
+            fig, ax = plt.subplots(figsize=(4, 2))
+            ax.hist(series, bins=20, color="#4F46E5", alpha=0.8, edgecolor="white")
+            ax.set_xlabel(c["col"], fontsize=8)
+            ax.set_ylabel("")
+            ax.tick_params(labelsize=7)
+            plt.tight_layout()
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png", dpi=100, transparent=True)
+            plt.close()
+            buf.seek(0)
+            hist_b64[c["col"]] = base64.b64encode(buf.read()).decode("utf-8")
+
+        # --- Semáforo por columna ---
+        def get_semaforo(col_name):
+            col_alerts = [a for a in alerts if a.get("col") == col_name]
+            for a in col_alerts:
+                if a["type"] in ("high_nulls", "constant_column"):
+                    return "rojo", "#ef4444"
+                if a["type"] == "high_cardinality":
+                    return "amarillo", "#f59e0b"
+            num_col = next((c for c in numeric if c["col"] == col_name), None)
+            if num_col:
+                if num_col["outlier_count"] > 0 or abs(num_col["skew"]) > 1:
+                    return "amarillo", "#f59e0b"
+            return "verde", "#22c55e"
+
+        # --- Datos Chart.js ---
+        col_types_labels = []
+        col_types_data = []
+        if ov["numeric_cols"]:
+            col_types_labels.append("Numéricas" if self.lang == "es" else "Numeric")
+            col_types_data.append(len(ov["numeric_cols"]))
+        if ov["categorical_cols"]:
+            col_types_labels.append("Categóricas" if self.lang == "es" else "Categorical")
+            col_types_data.append(len(ov["categorical_cols"]))
+        if ov["datetime_cols"]:
+            col_types_labels.append("Fechas" if self.lang == "es" else "Datetime")
+            col_types_data.append(len(ov["datetime_cols"]))
+
+        null_labels = []
+        null_values = []
+        for col in self.df.columns:
+            pct = round(self.df[col].isnull().sum() / len(self.df) * 100, 1)
+            if pct > 0:
+                null_labels.append(col)
+                null_values.append(pct)
+
+        outlier_labels = [c["col"] for c in numeric if c["outlier_count"] > 0]
+        outlier_values = [c["outlier_count"] for c in numeric if c["outlier_count"] > 0]
+
+        corr_labels = [f"{c['col_a']} ↔ {c['col_b']}" for c in corrs]
+        corr_values = [c["correlation"] for c in corrs]
+        corr_colors = ["#22c55e" if v > 0 else "#ef4444" for v in corr_values]
+
+        # --- Semáforo HTML (tabla resumen de columnas) ---
+        semaforo_rows = ""
+        for col in self.df.columns:
+            estado, color_hex = get_semaforo(col)
+            col_alerts = [a for a in alerts if a.get("col") == col]
+            notas = ", ".join(a["type"] for a in col_alerts) if col_alerts else ("ok" if self.lang == "es" else "ok")
+            dtype = str(self.df[col].dtype)
+            null_pct = round(self.df[col].isnull().sum() / len(self.df) * 100, 1)
+            semaforo_rows += f"""
             <tr>
-                <td>{c['col']}</td>
-                <td>{c['mean']}</td>
-                <td>{c['median']}</td>
-                <td>{c['std']}</td>
-                <td>{c['min']} – {c['max']}</td>
-                <td>{c['null_pct']}%</td>
-                <td>{c['outlier_count']}</td>
+                <td><strong>{col}</strong></td>
+                <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">{dtype}</code></td>
+                <td>{null_pct}%</td>
+                <td><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:{color_hex};vertical-align:middle;margin-right:6px"></span>{notas}</td>
             </tr>"""
 
-        # --- Filas de tabla de alertas ---
+        # --- Tabla numérica con histogramas ---
+        numeric_rows = ""
+        for c in numeric:
+            estado, color_hex = get_semaforo(c["col"])
+            skew_badge = ""
+            if abs(c["skew"]) > 1:
+                label = f'sesgo {c["skew"]}' if self.lang == "es" else f'skew {c["skew"]}'
+                skew_badge = f'<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:11px">{label}</span>'
+            null_badge = ""
+            if c["nulls"] > 0:
+                label = f'{c["null_pct"]}% nulos' if self.lang == "es" else f'{c["null_pct"]}% nulls'
+                null_badge = f'<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-size:11px">{label}</span>'
+            hist_img = ""
+            if c["col"] in hist_b64:
+                hist_img = f'<img src="data:image/png;base64,{hist_b64[c["col"]]}" style="width:100%;max-width:220px;display:block;margin-top:6px">'
+            numeric_rows += f"""
+            <tr>
+                <td>
+                  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{color_hex};margin-right:6px;vertical-align:middle"></span>
+                  <strong>{c["col"]}</strong>
+                  {hist_img}
+                </td>
+                <td>{c["mean"]}</td>
+                <td>{c["median"]}</td>
+                <td>{c["std"]}</td>
+                <td>{c["min"]} – {c["max"]}</td>
+                <td>{c["outlier_count"]}</td>
+                <td>{skew_badge} {null_badge}</td>
+            </tr>"""
+
+        # --- Tabla categórica ---
+        cat_rows = ""
+        for c in categorical:
+            estado, color_hex = get_semaforo(c["col"])
+            card_badge = ""
+            if c["high_cardinality"]:
+                label = "alta cardinalidad" if self.lang == "es" else "high cardinality"
+                card_badge = f'<span style="background:#ede9fe;color:#5b21b6;padding:2px 6px;border-radius:4px;font-size:11px">{label}</span>'
+            null_badge = ""
+            if c["nulls"] > 0:
+                label = f'{c["null_pct"]}% nulos' if self.lang == "es" else f'{c["null_pct"]}% nulls'
+                null_badge = f'<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-size:11px">{label}</span>'
+            cat_rows += f"""
+            <tr>
+                <td>
+                  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{color_hex};margin-right:6px;vertical-align:middle"></span>
+                  <strong>{c["col"]}</strong>
+                </td>
+                <td>{c["unique"]}</td>
+                <td><strong>{c["top_value"]}</strong> ({c["top_pct"]}%)</td>
+                <td>{card_badge} {null_badge}</td>
+            </tr>"""
+
+        # --- Alertas ---
         alert_rows = ""
+        type_colors = {
+            "high_nulls": ("#fee2e2", "#991b1b"),
+            "duplicates": ("#fef3c7", "#92400e"),
+            "high_cardinality": ("#ede9fe", "#5b21b6"),
+            "constant_column": ("#f1f5f9", "#475569"),
+        }
         for a in alerts:
             msg, sug = self._translate_alert(a)
+            bg, fg = type_colors.get(a["type"], ("#f1f5f9", "#475569"))
             alert_rows += f"""
             <tr>
-                <td>{a['type']}</td>
+                <td><span style="background:{bg};color:{fg};padding:3px 8px;border-radius:6px;font-size:12px">{a["type"]}</span></td>
                 <td>{msg}</td>
                 <td>{sug}</td>
             </tr>"""
 
-        no_alerts_msg = ""
-        if not alerts:
-            no_alerts_msg = (
-                "<p style='color:#22c55e'>✓ No se detectaron alertas.</p>"
-                if self.lang == "es"
-                else "<p style='color:#22c55e'>✓ No alerts detected.</p>"
-            )
+        # --- Suggest cards ---
+        suggest_lines = suggest_text.split("\n")
+        suggest_html = ""
+        for line in suggest_lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("---"):
+                suggest_html += f'<h3 style="margin:1.5rem 0 1rem;color:#334155">{line.replace("-","").strip()}</h3>'
+            elif line.startswith("→"):
+                suggest_html += f'<div style="background:#f8fafc;border-left:4px solid #4F46E5;border-radius:0 8px 8px 0;padding:0.75rem 1rem;margin:0.5rem 0;font-size:0.9rem">{line[1:].strip()}</div>'
+            else:
+                suggest_html += f'<p style="margin:0.5rem 0;color:#475569">{line}</p>'
 
-        # --- Gráfica de nulos (si existe) ---
-        chart_section = ""
-        if chart_b64:
-            title = "Nulos por columna" if self.lang == "es" else "Nulls per column"
-            chart_section = f"""
-            <h2>{title}</h2>
-            <img src="data:image/png;base64,{chart_b64}"
-                 style="max-width:100%;border-radius:8px;">"""
-
-        # Títulos según idioma
+        # Títulos
         if self.lang == "es":
-            t_overview = "Resumen general"
-            t_numeric = "Columnas numéricas"
-            t_alerts = "Alertas y recomendaciones"
+            t_nav = ["Resumen", "Numéricas", "Categóricas", "Calidad", "Alertas", "ML", "Narrativo"]
+            t_title = "Reporte de Análisis"
+            t_overview = "Resumen General"
+            t_semaforo = "Estado de columnas"
+            t_numeric = "Variables Numéricas"
+            t_categorical = "Variables Categóricas"
+            t_quality = "Score de Calidad"
+            t_nulls = "Nulos por columna (%)"
+            t_outliers = "Outliers por variable"
+            t_corr = "Correlaciones"
+            t_alerts = "Alertas y Recomendaciones"
+            t_suggest = "Sugerencias de Modelado"
+            t_narrative = "Análisis Narrativo"
             t_generated = "Generado con datanarrator"
+            t_rows = "Registros"
+            t_cols = "Columnas"
+            t_nullpct = "% Nulos"
+            t_dups = "Duplicados"
+            t_col = "Columna"
+            t_type = "Tipo"
+            t_unique = "Únicos"
+            t_top = "Más frecuente"
+            t_flags = "Flags"
+            t_pdf = "Exportar PDF"
+            t_no_alerts = "✓ No se detectaron alertas."
+            t_no_nulls = "✓ Sin valores nulos"
+            t_pen = "Desglose de penalizaciones"
         else:
+            t_nav = ["Overview", "Numeric", "Categorical", "Quality", "Alerts", "ML", "Narrative"]
+            t_title = "Analysis Report"
             t_overview = "Overview"
-            t_numeric = "Numeric columns"
-            t_alerts = "Alerts & recommendations"
+            t_semaforo = "Column health"
+            t_numeric = "Numeric Variables"
+            t_categorical = "Categorical Variables"
+            t_quality = "Quality Score"
+            t_nulls = "Nulls per column (%)"
+            t_outliers = "Outliers per variable"
+            t_corr = "Correlations"
+            t_alerts = "Alerts & Recommendations"
+            t_suggest = "Modeling Suggestions"
+            t_narrative = "Narrative Analysis"
             t_generated = "Generated with datanarrator"
+            t_rows = "Records"
+            t_cols = "Columns"
+            t_nullpct = "% Nulls"
+            t_dups = "Duplicates"
+            t_col = "Column"
+            t_type = "Type"
+            t_unique = "Unique"
+            t_top = "Most frequent"
+            t_flags = "Flags"
+            t_pdf = "Export PDF"
+            t_no_alerts = "✓ No alerts detected."
+            t_no_nulls = "✓ No null values"
+            t_pen = "Penalty breakdown"
 
         html = f"""<!DOCTYPE html>
 <html lang="{self.lang}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>datanarrator — report</title>
+<title>datanarrator — {t_title}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  body {{
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    margin: 0; padding: 2rem;
-    background: #f8fafc; color: #1e293b;
-  }}
-  h1 {{ color: #4F46E5; margin-bottom: 0.25rem; }}
-  h2 {{ color: #334155; border-bottom: 2px solid #e2e8f0;
-        padding-bottom: 0.5rem; margin-top: 2rem; }}
-  .meta {{ color: #64748b; font-size: 0.9rem; margin-bottom: 2rem; }}
-  .cards {{ display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }}
-  .card {{
-    background: white; border-radius: 12px; padding: 1.25rem 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-width: 140px;
-  }}
-  .card-value {{ font-size: 2rem; font-weight: 700; color: #4F46E5; }}
-  .card-label {{ font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }}
-  table {{
-    width: 100%; border-collapse: collapse;
-    background: white; border-radius: 12px;
-    overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  }}
-  th {{
-    background: #4F46E5; color: white;
-    padding: 0.75rem 1rem; text-align: left; font-weight: 600;
-  }}
-  td {{ padding: 0.65rem 1rem; border-bottom: 1px solid #f1f5f9; }}
-  tr:last-child td {{ border-bottom: none; }}
-  tr:hover td {{ background: #f8fafc; }}
-  .score-section {{
-    display: flex; align-items: center; gap: 2rem;
-    background: white; border-radius: 12px; padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem;
-  }}
-  .score-text p {{ margin: 0.25rem 0; color: #475569; }}
-  footer {{
-    margin-top: 3rem; text-align: center;
-    color: #94a3b8; font-size: 0.8rem;
-  }}
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#1e293b;min-height:100vh}}
+  nav{{background:#4F46E5;padding:0 1.5rem;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(79,70,229,0.3);flex-wrap:wrap}}
+  .brand{{color:white;font-weight:700;font-size:1rem;padding:0.875rem 1rem 0.875rem 0;border-right:1px solid rgba(255,255,255,0.2);margin-right:0.25rem}}
+  nav button{{background:none;border:none;color:rgba(255,255,255,0.75);padding:0.875rem 0.9rem;cursor:pointer;font-size:0.82rem;transition:all 0.2s;border-bottom:3px solid transparent;white-space:nowrap}}
+  nav button:hover{{color:white}}
+  nav button.active{{color:white;border-bottom:3px solid white;font-weight:600}}
+  .pdf-btn{{margin-left:auto;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3)!important;border-radius:6px;color:white!important;padding:0.5rem 1rem!important;font-size:0.82rem;cursor:pointer}}
+  .pdf-btn:hover{{background:rgba(255,255,255,0.25)!important}}
+  .section{{display:none;padding:2rem;max-width:1100px;margin:0 auto}}
+  .section.active{{display:block}}
+  h2{{font-size:1.3rem;font-weight:700;color:#1e293b;margin-bottom:1.5rem;padding-bottom:0.75rem;border-bottom:2px solid #e2e8f0}}
+  h3{{font-size:1rem;font-weight:600;color:#334155;margin:1.5rem 0 1rem}}
+  .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1rem;margin-bottom:2rem}}
+  .card{{background:white;border-radius:12px;padding:1.25rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);text-align:center}}
+  .card-value{{font-size:1.8rem;font-weight:700;color:#4F46E5}}
+  .card-label{{font-size:0.78rem;color:#64748b;margin-top:0.25rem}}
+  .charts-grid{{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}}
+  .chart-box{{background:white;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.08)}}
+  .chart-box h3{{margin-top:0;margin-bottom:1rem}}
+  .chart-container{{position:relative;height:200px}}
+  table{{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:1.5rem}}
+  th{{background:#4F46E5;color:white;padding:0.7rem 1rem;text-align:left;font-weight:600;font-size:0.82rem;cursor:pointer;user-select:none}}
+  th:hover{{background:#4338ca}}
+  td{{padding:0.65rem 1rem;border-bottom:1px solid #f1f5f9;font-size:0.88rem;vertical-align:top}}
+  tr:last-child td{{border-bottom:none}}
+  tr:hover td{{background:#f8fafc}}
+  .score-box{{background:white;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);display:flex;align-items:center;gap:2rem;margin-bottom:2rem}}
+  .score-box img{{width:130px;flex-shrink:0}}
+  .pen-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-top:1rem}}
+  .pen-card{{background:#f8fafc;border-radius:8px;padding:1rem;border-left:4px solid #4F46E5}}
+  .pen-label{{font-size:0.78rem;color:#64748b;text-transform:uppercase}}
+  .pen-value{{font-size:1.3rem;font-weight:700;color:#4F46E5;margin-top:0.25rem}}
+  .narrative-box{{background:white;border-radius:12px;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);line-height:1.8;color:#334155}}
+  footer{{text-align:center;padding:2rem;color:#94a3b8;font-size:0.8rem}}
+  @media print{{nav{{display:none}}.section{{display:block!important;page-break-after:always}}}}
+  @media(max-width:700px){{.charts-grid{{grid-template-columns:1fr}}.score-box{{flex-direction:column}}}}
 </style>
 </head>
 <body>
-<h1>datanarrator</h1>
-<p class="meta">{t_generated} v{self._get_version()}</p>
+<nav>
+  <div class="brand">datanarrator</div>
+  <button class="active" onclick="showSection(0)">{t_nav[0]}</button>
+  <button onclick="showSection(1)">{t_nav[1]}</button>
+  <button onclick="showSection(2)">{t_nav[2]}</button>
+  <button onclick="showSection(3)">{t_nav[3]}</button>
+  <button onclick="showSection(4)">{t_nav[4]}</button>
+  <button onclick="showSection(5)">{t_nav[5]}</button>
+  <button onclick="showSection(6)">{t_nav[6]}</button>
+  <button class="pdf-btn" onclick="window.print()">{t_pdf}</button>
+</nav>
 
-<h2>{t_overview}</h2>
-<div class="cards">
-  <div class="card">
-    <div class="card-value">{ov['rows']:,}</div>
-    <div class="card-label">{'Filas' if self.lang == 'es' else 'Rows'}</div>
+<!-- S0: RESUMEN -->
+<div class="section active" id="s0">
+  <h2>{t_overview}</h2>
+  <div class="cards">
+    <div class="card"><div class="card-value">{ov["rows"]:,}</div><div class="card-label">{t_rows}</div></div>
+    <div class="card"><div class="card-value">{ov["cols"]}</div><div class="card-label">{t_cols}</div></div>
+    <div class="card"><div class="card-value">{ov["null_pct"]}%</div><div class="card-label">{t_nullpct}</div></div>
+    <div class="card"><div class="card-value">{ov["duplicates"]}</div><div class="card-label">{t_dups}</div></div>
+    <div class="card"><div class="card-value">{qs["score"]}</div><div class="card-label">Quality Score</div></div>
+    <div class="card"><div class="card-value">{qs["grade"]}</div><div class="card-label">Grade</div></div>
   </div>
-  <div class="card">
-    <div class="card-value">{ov['cols']}</div>
-    <div class="card-label">{'Columnas' if self.lang == 'es' else 'Columns'}</div>
+  <div class="charts-grid">
+    <div class="chart-box">
+      <h3>{"Tipos de columnas" if self.lang == "es" else "Column types"}</h3>
+      <div class="chart-container"><canvas id="colTypesChart"></canvas></div>
+    </div>
+    <div class="chart-box">
+      <h3>{t_nulls}</h3>
+      {"<div class=\"chart-container\"><canvas id=\"nullsChart\"></canvas></div>" if null_labels else f'<p style="color:#22c55e;padding:1rem">{t_no_nulls}</p>'}
+    </div>
   </div>
-  <div class="card">
-    <div class="card-value">{ov['null_pct']}%</div>
-    <div class="card-label">{'Nulos' if self.lang == 'es' else 'Nulls'}</div>
+  <h3>{t_semaforo}</h3>
+  <table>
+    <thead><tr>
+      <th>{t_col}</th>
+      <th>{t_type}</th>
+      <th>% Nulls</th>
+      <th>Estado</th>
+    </tr></thead>
+    <tbody>{semaforo_rows}</tbody>
+  </table>
+</div>
+
+<!-- S1: NUMÉRICAS -->
+<div class="section" id="s1">
+  <h2>{t_numeric}</h2>
+  {"<div class=\"chart-box\" style=\"margin-bottom:1.5rem\"><h3>" + t_outliers + "</h3><div class=\"chart-container\"><canvas id=\"outliersChart\"></canvas></div></div>" if outlier_labels else ""}
+  <table id="numericTable">
+    <thead><tr>
+      <th onclick="sortTable('numericTable',0)">{t_col} ↕</th>
+      <th onclick="sortTable('numericTable',1)">{"Media" if self.lang == "es" else "Mean"} ↕</th>
+      <th onclick="sortTable('numericTable',2)">{"Mediana" if self.lang == "es" else "Median"} ↕</th>
+      <th onclick="sortTable('numericTable',3)">Std ↕</th>
+      <th>{"Rango" if self.lang == "es" else "Range"}</th>
+      <th onclick="sortTable('numericTable',5)">Outliers ↕</th>
+      <th>{t_flags}</th>
+    </tr></thead>
+    <tbody>{numeric_rows}</tbody>
+  </table>
+</div>
+
+<!-- S2: CATEGÓRICAS -->
+<div class="section" id="s2">
+  <h2>{t_categorical}</h2>
+  {"<p style=\"color:#64748b;padding:1rem\">No hay variables categóricas.</p>" if not categorical else f'<table id="catTable"><thead><tr><th onclick="sortTable(\'catTable\',0)">{t_col} ↕</th><th onclick="sortTable(\'catTable\',1)">{t_unique} ↕</th><th>{t_top}</th><th>{t_flags}</th></tr></thead><tbody>{cat_rows}</tbody></table>'}
+</div>
+
+<!-- S3: CALIDAD -->
+<div class="section" id="s3">
+  <h2>{t_quality}</h2>
+  <div class="score-box">
+    <img src="data:image/png;base64,{score_b64}" alt="score">
+    <div>
+      <h3 style="margin:0 0 0.5rem">{qs["resumen"]}</h3>
+      <p style="color:#475569">{t_quality}: <strong>{qs["score"]}/100</strong> — Grade <strong>{qs["grade"]}</strong></p>
+    </div>
   </div>
-  <div class="card">
-    <div class="card-value">{ov['duplicates']}</div>
-    <div class="card-label">{'Duplicados' if self.lang == 'es' else 'Duplicates'}</div>
+  <h3>{t_pen}</h3>
+  <div class="pen-grid">
+    {"".join(f'<div class="pen-card"><div class="pen-label">{k}</div><div class="pen-value">-{round(v,1)}</div></div>' for k, v in qs["penalizaciones"].items() if v > 0)}
   </div>
-  <div class="card">
-    <div class="card-value">{ov['memory_kb']} KB</div>
-    <div class="card-label">{'Memoria' if self.lang == 'es' else 'Memory'}</div>
+  {"<h3>" + t_corr + "</h3><div class=\"chart-box\" style=\"margin-top:1rem\"><div class=\"chart-container\"><canvas id=\"corrChart\"></canvas></div></div>" if corrs else ""}
+</div>
+
+<!-- S4: ALERTAS -->
+<div class="section" id="s4">
+  <h2>{t_alerts}</h2>
+  {"<p style=\"color:#22c55e;padding:1rem;background:white;border-radius:12px\">" + t_no_alerts + "</p>" if not alerts else f'<table><thead><tr><th>Tipo</th><th>Mensaje</th><th>{"Sugerencia" if self.lang == "es" else "Suggestion"}</th></tr></thead><tbody>{alert_rows}</tbody></table>'}
+</div>
+
+<!-- S5: ML -->
+<div class="section" id="s5">
+  <h2>{t_suggest}</h2>
+  <div style="background:white;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+    {suggest_html}
   </div>
 </div>
 
-<div class="score-section">
-  <img src="data:image/png;base64,{score_b64}" style="width:180px;">
-  <div class="score-text">
-    <h2 style="border:none;margin:0">{t_overview} — Quality Score</h2>
-    <p>{qs['resumen']}</p>
-  </div>
+<!-- S6: NARRATIVO -->
+<div class="section" id="s6">
+  <h2>{t_narrative}</h2>
+  <div class="narrative-box">{narrative_text}</div>
 </div>
 
-<h2>{t_numeric}</h2>
-<table>
-  <thead>
-    <tr>
-      <th>{'Columna' if self.lang == 'es' else 'Column'}</th>
-      <th>{'Media' if self.lang == 'es' else 'Mean'}</th>
-      <th>{'Mediana' if self.lang == 'es' else 'Median'}</th>
-      <th>Std</th>
-      <th>{'Rango' if self.lang == 'es' else 'Range'}</th>
-      <th>{'Nulos' if self.lang == 'es' else 'Nulls'}</th>
-      <th>Outliers</th>
-    </tr>
-  </thead>
-  <tbody>{numeric_rows}</tbody>
-</table>
+<footer>{t_generated} v{self._get_version()} · <a href="https://pypi.org/project/datanarrator/" style="color:#4F46E5">PyPI</a></footer>
 
-{chart_section}
+<script>
+function showSection(idx){{
+  document.querySelectorAll(".section").forEach((s,i)=>s.classList.toggle("active",i===idx));
+  document.querySelectorAll("nav button:not(.pdf-btn)").forEach((b,i)=>b.classList.toggle("active",i===idx));
+}}
 
-<h2>{t_alerts}</h2>
-{no_alerts_msg}
-{'<table><thead><tr><th>Tipo</th><th>Mensaje</th><th>Sugerencia</th></tr></thead><tbody>' + alert_rows + '</tbody></table>' if alerts else ''}
+function sortTable(id,col){{
+  const table=document.getElementById(id);
+  const rows=Array.from(table.querySelectorAll("tbody tr"));
+  const asc=table.dataset.sort==col&&table.dataset.dir=="asc"?false:true;
+  table.dataset.sort=col;table.dataset.dir=asc?"asc":"desc";
+  rows.sort((a,b)=>{{
+    const va=a.cells[col].textContent.trim();
+    const vb=b.cells[col].textContent.trim();
+    const na=parseFloat(va),nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb))return asc?na-nb:nb-na;
+    return asc?va.localeCompare(vb):vb.localeCompare(va);
+  }});
+  rows.forEach(r=>table.querySelector("tbody").appendChild(r));
+}}
 
-<footer>{t_generated} · <a href="https://pypi.org/project/datanarrator/">PyPI</a></footer>
+const COLORS=["#4F46E5","#06b6d4","#f59e0b","#22c55e","#ef4444","#a855f7"];
+
+new Chart(document.getElementById("colTypesChart"),{{
+  type:"doughnut",
+  data:{{labels:{json.dumps(col_types_labels)},datasets:[{{data:{json.dumps(col_types_data)},backgroundColor:COLORS}}]}},
+  options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{position:"bottom"}}}}}}
+}});
+
+{"new Chart(document.getElementById(\"nullsChart\"),{type:\"bar\",data:{labels:" + json.dumps(null_labels) + ",datasets:[{label:\"% nulls\",data:" + json.dumps(null_values) + ",backgroundColor:\"#ef4444\",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:100}},plugins:{legend:{display:false}}}});" if null_labels else ""}
+
+{"new Chart(document.getElementById(\"outliersChart\"),{type:\"bar\",data:{labels:" + json.dumps(outlier_labels) + ",datasets:[{label:\"Outliers\",data:" + json.dumps(outlier_values) + ",backgroundColor:\"#f59e0b\",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});" if outlier_labels else ""}
+
+{"new Chart(document.getElementById(\"corrChart\"),{type:\"bar\",data:{labels:" + json.dumps(corr_labels) + ",datasets:[{label:\"r\",data:" + json.dumps(corr_values) + ",backgroundColor:" + json.dumps(corr_colors) + ",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:\"y\",scales:{x:{min:-1,max:1}},plugins:{legend:{display:false}}}});" if corrs else ""}
+</script>
 </body>
 </html>"""
 
