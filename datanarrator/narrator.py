@@ -477,6 +477,38 @@ class Narrator:
             t_no_nulls = "✓ No null values"
             t_pen = "Penalty breakdown"
 
+        # Pre-calculamos secciones condicionales para evitar
+        # backslashes dentro de f-strings (incompatible con Python 3.10)
+        if outlier_labels:
+            outliers_section = (
+                '<div class="chart-box" style="margin-bottom:1.5rem"><h3>'
+                + t_outliers
+                + '</h3><div class="chart-container">'
+                + '<canvas id="outliersChart"></canvas></div></div>'
+            )
+        else:
+            outliers_section = ""
+
+        if corrs:
+            corr_section = (
+                '<h3>' + t_corr + '</h3>'
+                '<div class="chart-box" style="margin-top:1rem">'
+                '<div class="chart-container">'
+                '<canvas id="corrChart"></canvas></div></div>'
+            )
+            corr_chart_js = (
+                'new Chart(document.getElementById("corrChart"),{'
+                'type:"bar",data:{labels:' + json.dumps(corr_labels)
+                + ',datasets:[{label:"r",data:' + json.dumps(corr_values)
+                + ',backgroundColor:' + json.dumps(corr_colors)
+                + ',borderRadius:4}]},options:{responsive:true,'
+                'maintainAspectRatio:false,indexAxis:"y",'
+                'scales:{x:{min:-1,max:1}},plugins:{legend:{display:false}}}});'
+            )
+        else:
+            corr_section = ""
+            corr_chart_js = ""
+
         html = f"""<!DOCTYPE html>
 <html lang="{self.lang}">
 <head>
@@ -573,7 +605,7 @@ class Narrator:
 <!-- S1: NUMÉRICAS -->
 <div class="section" id="s1">
   <h2>{t_numeric}</h2>
-  {"<div class=\"chart-box\" style=\"margin-bottom:1.5rem\"><h3>" + t_outliers + "</h3><div class=\"chart-container\"><canvas id=\"outliersChart\"></canvas></div></div>" if outlier_labels else ""}
+  {outliers_section}
   <table id="numericTable">
     <thead><tr>
       <th onclick="sortTable('numericTable',0)">{t_col} ↕</th>
@@ -608,7 +640,7 @@ class Narrator:
   <div class="pen-grid">
     {"".join(f'<div class="pen-card"><div class="pen-label">{k}</div><div class="pen-value">-{round(v,1)}</div></div>' for k, v in qs["penalizaciones"].items() if v > 0)}
   </div>
-  {"<h3>" + t_corr + "</h3><div class=\"chart-box\" style=\"margin-top:1rem\"><div class=\"chart-container\"><canvas id=\"corrChart\"></canvas></div></div>" if corrs else ""}
+  {corr_section}
 </div>
 
 <!-- S4: ALERTAS -->
@@ -666,7 +698,7 @@ new Chart(document.getElementById("colTypesChart"),{{
 
 {"new Chart(document.getElementById(\"outliersChart\"),{type:\"bar\",data:{labels:" + json.dumps(outlier_labels) + ",datasets:[{label:\"Outliers\",data:" + json.dumps(outlier_values) + ",backgroundColor:\"#f59e0b\",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});" if outlier_labels else ""}
 
-{"new Chart(document.getElementById(\"corrChart\"),{type:\"bar\",data:{labels:" + json.dumps(corr_labels) + ",datasets:[{label:\"r\",data:" + json.dumps(corr_values) + ",backgroundColor:" + json.dumps(corr_colors) + ",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:\"y\",scales:{x:{min:-1,max:1}},plugins:{legend:{display:false}}}});" if corrs else ""}
+{corr_chart_js}
 </script>
 </body>
 </html>"""
