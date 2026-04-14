@@ -244,7 +244,7 @@ class Narrator:
         qs = self.quality_score()
         narrative_text = self.narrative().replace("\n", "<br>")
 
-        # --- Textos de audiencia para sección S7 ---
+        # --- Textos de audiencia para sección S6 ---
         narrate_exec   = self._narrate_executive().replace("\n", "<br>")
         narrate_tech   = self._narrate_technical().replace("\n", "<br>")
         narrate_simple = self._narrate_non_technical().replace("\n", "<br>")
@@ -257,7 +257,7 @@ class Narrator:
         ax.pie([score, 100 - score], colors=[color, "#e5e7eb"],
                startangle=90, counterclock=False)
         ax.text(0, 0, f"{score}", ha="center", va="center",
-                fontsize=28, fontweight="bold", color=color)
+                fontsize=28, fontweight="bold", color="#1e293b")
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format="png", dpi=120, transparent=True)
@@ -319,6 +319,12 @@ class Narrator:
         outlier_labels = [c["col"] for c in numeric if c["outlier_count"] > 0]
         outlier_values = [c["outlier_count"] for c in numeric if c["outlier_count"] > 0]
 
+	# --- Datos scatter plot ---
+        scatter_cols = [c["col"] for c in numeric]
+        scatter_data = {}
+        for col in scatter_cols:
+            scatter_data[col] = self.df[col].dropna().tolist()
+
         corr_labels = [f"{c['col_a']} ↔ {c['col_b']}" for c in corrs]
         corr_values = [c["correlation"] for c in corrs]
         corr_colors = ["#22c55e" if v > 0 else "#ef4444" for v in corr_values]
@@ -336,7 +342,13 @@ class Narrator:
                 <td><strong>{col}</strong></td>
                 <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">{dtype}</code></td>
                 <td>{null_pct}%</td>
-                <td><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:{color_hex};vertical-align:middle;margin-right:6px"></span>{notas}</td>
+                <td>
+                  <span class="tooltip-wrap">
+                    <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:{color_hex};vertical-align:middle;margin-right:6px;cursor:pointer"></span>
+                    <span class="tooltip-text">{notas}</span>
+                  </span>
+                  {notas}
+                </td>
             </tr>"""
 
         # --- Tabla numérica con histogramas ---
@@ -355,7 +367,7 @@ class Narrator:
             if c["col"] in hist_b64:
                 hist_img = f'<img src="data:image/png;base64,{hist_b64[c["col"]]}" style="width:100%;max-width:220px;display:block;margin-top:6px">'
             numeric_rows += f"""
-            <tr>
+            <tr data-col="{c["col"]}" data-hist="data:image/png;base64,{hist_b64.get(c["col"], '')}" onclick="toggleHistogram('{c["col"]}')" style="cursor:pointer">
                 <td>
                   <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{color_hex};margin-right:6px;vertical-align:middle"></span>
                   <strong>{c["col"]}</strong>
@@ -426,7 +438,7 @@ class Narrator:
 
         # Títulos
         if self.lang == "es":
-            t_nav = ["Resumen", "Numéricas", "Categóricas", "Calidad", "Alertas", "ML", "Narrativo", "👥 Audiencias"]
+            t_nav = ["Resumen", "Numéricas", "Categóricas", "Calidad", "Alertas", "ML", "👥 Audiencias"]
             t_title = "Reporte de Análisis"
             t_overview = "Resumen General"
             t_semaforo = "Estado de columnas"
@@ -458,7 +470,7 @@ class Narrator:
             t_aud_tech = "Técnico"
             t_aud_simple = "No técnico"
         else:
-            t_nav = ["Overview", "Numeric", "Categorical", "Quality", "Alerts", "ML", "Narrative", "👥 Audiences"]
+            t_nav = ["Overview", "Numeric", "Categorical", "Quality", "Alerts", "ML", "👥 Audiences"]
             t_title = "Analysis Report"
             t_overview = "Overview"
             t_semaforo = "Column health"
@@ -618,6 +630,9 @@ class Narrator:
   .pen-label{{font-size:0.78rem;color:#64748b;text-transform:uppercase}}
   .pen-value{{font-size:1.3rem;font-weight:700;color:#4F46E5;margin-top:0.25rem}}
   .narrative-box{{background:white;border-radius:12px;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);line-height:1.8;color:#334155}}
+  .tooltip-wrap{{position:relative;display:inline-block}}
+  .tooltip-text{{visibility:hidden;background:#1e293b;color:white;font-size:0.75rem;padding:4px 8px;border-radius:6px;position:absolute;z-index:10;bottom:125%;left:50%;transform:translateX(-50%);white-space:nowrap;opacity:0;transition:opacity 0.2s}}
+  .tooltip-wrap:hover .tooltip-text{{visibility:visible;opacity:1}}
   footer{{text-align:center;padding:2rem;color:#94a3b8;font-size:0.8rem}}
   @media print{{nav{{display:none}}.section{{display:block!important;page-break-after:always}}}}
   @media(max-width:700px){{.charts-grid{{grid-template-columns:1fr}}.score-box{{flex-direction:column}}}}
@@ -633,7 +648,6 @@ class Narrator:
   <button onclick="showSection(4)">{t_nav[4]}</button>
   <button onclick="showSection(5)">{t_nav[5]}</button>
   <button onclick="showSection(6)">{t_nav[6]}</button>
-  <button onclick="showSection(7)">{t_nav[7]}</button>
   <button class="pdf-btn" onclick="window.print()">{t_pdf}</button>
 </nav>
 
@@ -673,6 +687,19 @@ class Narrator:
 <!-- S1: NUMÉRICAS -->
 <div class="section" id="s1">
   <h2>{t_numeric}</h2>
+  <input type="text" id="numericSearch" onkeyup="filterTable('numericTable', this.value)" placeholder="{'Buscar columna...' if self.lang == 'es' else 'Search column...'}" style="width:100%;padding:0.6rem 1rem;margin-bottom:1rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.9rem;outline:none">
+  <div class="chart-box" style="margin-bottom:1.5rem">
+    <h3>{'Scatter plot entre columnas' if self.lang == 'es' else 'Scatter plot between columns'}</h3>
+    <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+      <select id="scatterX" onchange="updateScatter()" style="padding:0.5rem 1rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.9rem;flex:1">
+        {''.join(f'<option value="{col}">{col}</option>' for col in scatter_cols)}
+      </select>
+      <select id="scatterY" onchange="updateScatter()" style="padding:0.5rem 1rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.9rem;flex:1">
+        {''.join(f'<option value="{col}" {"selected" if i==1 else ""}>{col}</option>' for i, col in enumerate(scatter_cols))}
+      </select>
+    </div>
+    <div class="chart-container" style="height:300px"><canvas id="scatterChart"></canvas></div>
+  </div>
   {outliers_section}
   <table id="numericTable">
     <thead><tr>
@@ -725,14 +752,8 @@ class Narrator:
   </div>
 </div>
 
-<!-- S6: NARRATIVO -->
+<!-- S6: AUDIENCIAS -->
 <div class="section" id="s6">
-  <h2>{t_narrative}</h2>
-  <div class="narrative-box">{narrative_text}</div>
-</div>
-
-<!-- S7: AUDIENCIAS -->
-<div class="section" id="s7">
   <h2>{t_audience}</h2>
   <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap">
     <button id="tab-exec" onclick="showAudience('exec')" style="padding:0.6rem 1.2rem;border-radius:8px;border:2px solid #4F46E5;background:#4F46E5;color:white;cursor:pointer;font-weight:600;font-size:0.85rem">{t_aud_exec}</button>
@@ -776,6 +797,30 @@ function sortTable(id,col){{
   rows.forEach(r=>table.querySelector("tbody").appendChild(r));
 }}
 
+function filterTable(id, query) {{
+  const table = document.getElementById(id);
+  const rows = Array.from(table.querySelectorAll("tbody tr"));
+  const q = query.toLowerCase();
+  rows.forEach(r => {{
+    const text = r.cells[0].textContent.toLowerCase();
+    r.style.display = text.includes(q) ? "" : "none";
+  }});
+}}
+
+function toggleHistogram(col) {{
+  const existing = document.getElementById("hist-detail-" + col);
+  if (existing) {{ existing.remove(); return; }}
+  const row = document.querySelector(`tr[data-col="${{col}}"]`);
+  if (!row) return;
+  const detail = document.createElement("tr");
+  detail.id = "hist-detail-" + col;
+  detail.innerHTML = `<td colspan="7" style="background:#f8fafc;padding:1rem">
+    <div style="font-weight:600;margin-bottom:0.5rem;color:#334155">${{col}} — distribución detallada</div>
+    <img src="${{row.dataset.hist}}" style="width:100%;max-width:600px;border-radius:8px">
+  </td>`;
+  row.after(detail);
+}}
+
 const COLORS=["#4F46E5","#06b6d4","#f59e0b","#22c55e","#ef4444","#a855f7"];
 
 new Chart(document.getElementById("colTypesChart"),{{
@@ -789,6 +834,40 @@ new Chart(document.getElementById("colTypesChart"),{{
 {outliers_chart_js}
 
 {corr_chart_js}
+
+const SCATTER_DATA = {json.dumps(scatter_data)};
+let scatterChart = null;
+
+function updateScatter() {{
+  const xCol = document.getElementById("scatterX").value;
+  const yCol = document.getElementById("scatterY").value;
+  const xData = SCATTER_DATA[xCol] || [];
+  const yData = SCATTER_DATA[yCol] || [];
+  const points = xData.map((x, i) => ({{x, y: yData[i]}})).filter(p => p.y !== undefined);
+  if (scatterChart) scatterChart.destroy();
+  scatterChart = new Chart(document.getElementById("scatterChart"), {{
+    type: "scatter",
+    data: {{
+      datasets: [{{
+        label: xCol + " vs " + yCol,
+        data: points,
+        backgroundColor: "rgba(79,70,229,0.4)",
+        pointRadius: 4,
+      }}]
+    }},
+    options: {{
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {{legend: {{display: false}}}},
+      scales: {{
+        x: {{title: {{display: true, text: xCol}}}},
+        y: {{title: {{display: true, text: yCol}}}}
+      }}
+    }}
+  }});
+}}
+
+updateScatter();
 </script>
 </body>
 </html>"""
