@@ -911,7 +911,7 @@ class Narrator:
                     pct_neg = round((1 - c["mean"]) * 100, 1)
                     balance = "imbalanced" if abs(pct_pos - 50) > 15 else "relatively balanced"
                     parrafos.append(
-                        f"Variable {c["col"]} is binary and a natural candidate "
+                        f"Variable {c['col']} is binary and a natural candidate "
                         f"as a target variable for classification. "
                         f"{pct_pos}% of records are positive vs {pct_neg}% negative — "
                         f"a {balance} distribution. "
@@ -942,12 +942,12 @@ class Narrator:
                     )
 
                 for c in interesting:
-                    linea = f"Variable {c["col"]} "
+                    linea = f"Variable {c['col']} "
                     if abs(c["skew"]) > 1:
                         direction = "positive" if c["skew"] > 0 else "negative"
                         linea += (
                             f"shows a pronounced {direction} skew "
-                            f"(mean={c["mean"]}, median={c["median"]}): "
+                            f"(mean={c['mean']}, median={c['median']}): "
                         )
                         if c["skew"] > 0:
                             linea += (
@@ -961,7 +961,7 @@ class Narrator:
                     else:
                         linea += (
                             f"is relatively symmetric "
-                            f"(mean={c["mean"]}, median={c["median"]}). "
+                            f"(mean={c['mean']}, median={c['median']}). "
                         )
 
                     if c["outlier_count"] > 0:
@@ -973,19 +973,19 @@ class Narrator:
                             )
                         else:
                             linea += (
-                                f"{c["outlier_count"]} outliers ({pct}%) worth "
+                                f"{c['outlier_count']} outliers ({pct}%) worth "
                                 f"reviewing before modeling. "
                             )
 
                     if c["nulls"] > 0:
                         if c["null_pct"] > 20:
                             linea += (
-                                f"{c["null_pct"]}% nulls is critical — consider "
+                                f"{c['null_pct']}% nulls is critical — consider "
                                 f"whether missingness itself is informative before imputing."
                             )
                         else:
                             linea += (
-                                f"{c["null_pct"]}% nulls is manageable "
+                                f"{c['null_pct']}% nulls is manageable "
                                 f"via median imputation."
                             )
                     parrafos.append(linea)
