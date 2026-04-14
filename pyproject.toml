@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
-  { name = "Iker Navarro", email = "tu@email.com" }
+  { name = "Iker Navarro", email = "inavar11@itam.com" }
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
