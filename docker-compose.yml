@@ -5,3 +5,13 @@ services:
     restart: "no"
     volumes:
       - ./examples:/app/examples
+
+  tests:
+    build: .
+    container_name: datanarrator-tests
+    restart: "no"
+    volumes:
+      - ./tests:/app/tests
+    command: >
+      sh -c "pip install pytest --no-cache-dir -q &&
+             pytest tests/ -v"
