@@ -58,8 +58,10 @@ print(n.describe())
 --- Resumen general ---
 El dataset contiene 891 registros con 12 columnas: 7 numéricas, 5 categóricas.
 Valores nulos: 866 (8.1% del total).
+Memoria utilizada: 285.6 KB.
 --- Columnas numéricas ---
-Age: media=29.7, mediana=28.0, std=14.53. Se detectaron 11 posibles outliers.
+Age: media=29.7, mediana=28.0, std=14.53, rango=[0.42 – 80.0], nulos=177 (19.9%). Se detectaron 11 posibles outliers (IQR).
+Fare: media=32.2, mediana=14.45, std=49.69, rango=[0.0 – 512.33]. Se detectaron 116 posibles outliers (IQR). Distribución con sesgo positivo (4.79).
 --- Correlaciones relevantes ---
 Pclass ↔ Fare: correlación moderada negativa (-0.55)
 --- Alertas y recomendaciones ---
@@ -77,12 +79,16 @@ print(n.suggest())
 Tipo de problema detectado: clasificacion binaria
 Variable objetivo probable: Survived
 Modelos recomendados:
-→ Logistic Regression — buen baseline para clasificacion
-→ Random Forest — robusto con variables mixtas
-→ XGBoost — recomendado si priorizas accuracy
+  → Logistic Regression — buen baseline para clasificacion
+  → Random Forest — robusto con variables mixtas
+  → XGBoost — recomendado si priorizas accuracy
+Columnas a excluir o tratar: Name, Ticket, Cabin
+  → Alta cardinalidad, usa target encoding o eliminalas
 Preprocesamiento recomendado:
-→ Imputar nulos en: Age
-→ Encodear variables categoricas: Name, Sex, Ticket, Cabin, Embarked
+  → Imputar nulos en: Age
+  → Aplicar log transform en: SibSp, Parch, Fare (sesgo alto)
+  → Revisar outliers en: Age, SibSp, Parch, Fare
+  → Encodear var
 ```
 
 ### Comparar dos datasets
@@ -108,8 +114,8 @@ print(resultado["penalizaciones"])
 ```
 
 ```
-El dataset obtuvo un score de 72/100 (grado C).
-{'nulos': 12.15, 'duplicados': 0, 'constantes': 0, 'cardinalidad': 0, 'cols_nulas': 10}
+El dataset obtuvo un score de 68/100 (grado D).
+{'nulos': 12.15, 'duplicados': 0.0, 'constantes': 0, 'cardinalidad': 15, 'cols_nulas': 5}
 ```
 
 ### Análisis narrativo
@@ -122,7 +128,9 @@ print(n.narrative())
 Con 891 registros y 12 columnas, el dataset es de tamaño moderado — adecuado
 para la mayoría de algoritmos de machine learning. Contiene 7 variables numéricas
 y 5 categóricas. El problema de calidad más crítico es la columna "Cabin", que
-concentra el 77.1% de valores nulos...
+concentra el 77.1% de valores nulos — un nivel tan alto sugiere que esta
+información simplemente no estaba disponible para la mayoría de los registros
+y probablemente deba eliminarse. Score de calidad global: 68/100 (grado D).
 ```
 
 ### Exportar reporte HTML interactivo
