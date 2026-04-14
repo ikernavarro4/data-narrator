@@ -476,3 +476,101 @@ def test_narrative_with_nulls(df_with_nulls):
     n = Narrator(df_with_nulls, lang="es")
     result = n.narrative()
     assert "nulos" in result or "null" in result
+
+# -----------------------------------------------------------------------
+# Tests de narrate()
+# -----------------------------------------------------------------------
+
+def test_narrate_returns_string(df_basic):
+    """Verifica que narrate() retorna un string."""
+    n = Narrator(df_basic, lang="es")
+    assert isinstance(n.narrate(audience="technical"), str)
+
+
+def test_narrate_invalid_audience(df_basic):
+    """Verifica que una audiencia inválida lanza ValueError."""
+    n = Narrator(df_basic, lang="es")
+    with pytest.raises(ValueError):
+        n.narrate(audience="invalid")
+
+
+def test_narrate_default_audience(df_basic):
+    """Verifica que la audiencia por defecto es technical."""
+    n = Narrator(df_basic, lang="es")
+    result_default = n.narrate()
+    result_technical = n.narrate(audience="technical")
+    assert result_default == result_technical
+
+
+def test_narrate_executive_not_empty(df_basic):
+    """Verifica que la narrativa ejecutiva no está vacía."""
+    n = Narrator(df_basic, lang="es")
+    result = n.narrate(audience="executive")
+    assert len(result) > 0
+
+
+def test_narrate_technical_not_empty(df_basic):
+    """Verifica que la narrativa técnica no está vacía."""
+    n = Narrator(df_basic, lang="es")
+    result = n.narrate(audience="technical")
+    assert len(result) > 0
+
+
+def test_narrate_non_technical_not_empty(df_basic):
+    """Verifica que la narrativa no técnica no está vacía."""
+    n = Narrator(df_basic, lang="es")
+    result = n.narrate(audience="non-technical")
+    assert len(result) > 0
+
+
+def test_narrate_executive_contains_header(df_basic):
+    """Verifica que la narrativa ejecutiva tiene su header."""
+    n = Narrator(df_basic, lang="es")
+    result = n.narrate(audience="executive")
+    assert "Resumen Ejecutivo" in result
+
+
+def test_narrate_non_technical_contains_header(df_basic):
+    """Verifica que la narrativa no técnica tiene su header."""
+    n = Narrator(df_basic, lang="es")
+    result = n.narrate(audience="non-technical")
+    assert "Explicación Simple" in result
+
+
+def test_narrate_audiences_are_different(df_basic):
+    """Verifica que las tres audiencias generan textos distintos."""
+    n = Narrator(df_basic, lang="es")
+    executive = n.narrate(audience="executive")
+    technical = n.narrate(audience="technical")
+    non_technical = n.narrate(audience="non-technical")
+    assert executive != technical
+    assert technical != non_technical
+    assert executive != non_technical
+
+
+def test_narrate_english_executive(df_basic):
+    """Verifica que la narrativa ejecutiva en inglés funciona."""
+    n = Narrator(df_basic, lang="en")
+    result = n.narrate(audience="executive")
+    assert "Executive Summary" in result
+
+
+def test_narrate_english_non_technical(df_basic):
+    """Verifica que la narrativa no técnica en inglés funciona."""
+    n = Narrator(df_basic, lang="en")
+    result = n.narrate(audience="non-technical")
+    assert "Simple Explanation" in result
+
+
+def test_narrate_with_nulls(df_with_nulls):
+    """Verifica que narrate() funciona con dataset con nulos."""
+    n = Narrator(df_with_nulls, lang="es")
+    for audience in ["executive", "technical", "non-technical"]:
+        assert isinstance(n.narrate(audience=audience), str)
+
+
+def test_narrate_numeric_only(df_numeric_only):
+    """Verifica que narrate() funciona con dataset solo numérico."""
+    n = Narrator(df_numeric_only, lang="es")
+    for audience in ["executive", "technical", "non-technical"]:
+        assert isinstance(n.narrate(audience=audience), str)
