@@ -425,12 +425,12 @@ def test_translate_alert_english_high_cardinality(df_basic):
     n = Narrator(df_basic, lang="en")
     alert = {
         "type": "high_cardinality",
-        "col": "nombre",
+        "col": "ciudad",
         "message": "'nombre' tiene 500 valores únicos.",
         "suggestion": "Evita label encoding directo. Considera target encoding.",
     }
     msg, sug = n._translate_alert(alert)
-    assert "nombre" in msg
+    assert "ciudad" in msg
     assert "unique values" in msg
     assert "target encoding" in sug
 

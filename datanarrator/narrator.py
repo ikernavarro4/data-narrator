@@ -2438,13 +2438,15 @@ updateScatter();
         # exacta del mensaje en español
         MENSAJES = {
             "duplicates": lambda a: (
-                f"{a['message'].split()[0]} duplicate rows detected."
+                f"{int(self.df.duplicated().sum())} duplicate rows detected."
             ),
             "high_nulls": lambda a: (
-                f"'{a['col']}' has {a['message'].split()[2]} null values."
+                f"'{a['col']}' has "
+                f"{round(self.df[a['col']].isnull().sum() / len(self.df) * 100, 1)}%"
+                f" null values."
             ),
             "high_cardinality": lambda a: (
-                f"'{a['col']}' has {a['message'].split()[2]} unique values."
+                f"'{a['col']}' has {self.df[a['col']].nunique()} unique values."
             ),
             "constant_column": lambda a: (
                 f"'{a['col']}' has only one unique value."
