@@ -509,6 +509,35 @@ class Narrator:
             corr_section = ""
             corr_chart_js = ""
 
+        # nulls_container
+        if null_labels:
+            nulls_container = '<div class="chart-container"><canvas id="nullsChart"></canvas></div>'
+        else:
+            nulls_container = f'<p style="color:#22c55e;padding:1rem">{t_no_nulls}</p>'
+
+        # cat_table
+        if not categorical:
+            cat_table = '<p style="color:#64748b;padding:1rem">No hay variables categóricas.</p>'
+        else:
+            cat_table = (
+                '<table id="catTable"><thead><tr>'
+                + f'<th onclick="sortTable(\'catTable\',0)">{t_col} ↕</th>'
+                + f'<th onclick="sortTable(\'catTable\',1)">{t_unique} ↕</th>'
+                + f'<th>{t_top}</th><th>{t_flags}</th>'
+                + f'</tr></thead><tbody>{cat_rows}</tbody></table>'
+            )
+
+        # alerts_table
+        if not alerts:
+            alerts_table = f'<p style="color:#22c55e;padding:1rem;background:white;border-radius:12px">{t_no_alerts}</p>'
+        else:
+            th_sug = "Sugerencia" if self.lang == "es" else "Suggestion"
+            alerts_table = (
+                f'<table><thead><tr><th>Tipo</th><th>Mensaje</th>'
+                + f'<th>{th_sug}</th></tr></thead>'
+                + f'<tbody>{alert_rows}</tbody></table>'
+            )
+
         if null_labels:
             nulls_chart_js = (
                 'new Chart(document.getElementById("nullsChart"),{'
@@ -612,7 +641,7 @@ class Narrator:
     </div>
     <div class="chart-box">
       <h3>{t_nulls}</h3>
-      {"<div class=\"chart-container\"><canvas id=\"nullsChart\"></canvas></div>" if null_labels else f'<p style="color:#22c55e;padding:1rem">{t_no_nulls}</p>'}
+      {nulls_container}
     </div>
   </div>
   <h3>{t_semaforo}</h3>
@@ -648,7 +677,7 @@ class Narrator:
 <!-- S2: CATEGÓRICAS -->
 <div class="section" id="s2">
   <h2>{t_categorical}</h2>
-  {"<p style=\"color:#64748b;padding:1rem\">No hay variables categóricas.</p>" if not categorical else f'<table id="catTable"><thead><tr><th onclick="sortTable(\'catTable\',0)">{t_col} ↕</th><th onclick="sortTable(\'catTable\',1)">{t_unique} ↕</th><th>{t_top}</th><th>{t_flags}</th></tr></thead><tbody>{cat_rows}</tbody></table>'}
+  {cat_table}
 </div>
 
 <!-- S3: CALIDAD -->
@@ -671,7 +700,7 @@ class Narrator:
 <!-- S4: ALERTAS -->
 <div class="section" id="s4">
   <h2>{t_alerts}</h2>
-  {"<p style=\"color:#22c55e;padding:1rem;background:white;border-radius:12px\">" + t_no_alerts + "</p>" if not alerts else f'<table><thead><tr><th>Tipo</th><th>Mensaje</th><th>{"Sugerencia" if self.lang == "es" else "Suggestion"}</th></tr></thead><tbody>{alert_rows}</tbody></table>'}
+  {alerts_table}
 </div>
 
 <!-- S5: ML -->
