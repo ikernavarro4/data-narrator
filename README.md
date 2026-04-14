@@ -7,7 +7,7 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ikernavarro4/data-narrator/blob/main/notebooks/tutorial.ipynb)
 
-**datanarrator** convierte cualquier DataFrame de pandas en un análisis en lenguaje natural. En lugar de leer tablas de números, obtienes texto interpretado con hallazgos, alertas y recomendaciones automáticas.
+**datanarrator** convierte cualquier DataFrame de pandas en un análisis en lenguaje natural. En lugar de leer tablas de números, obtienes texto interpretado con hallazgos, alertas y recomendaciones automáticas y reportes HTML interactivos.
 
 ---
 
@@ -38,9 +38,11 @@ print(n.describe())
 | `describe()` | Análisis completo en lenguaje natural |
 | `executive_summary()` | Resumen ejecutivo de 2-3 oraciones |
 | `alerts_only()` | Solo alertas y recomendaciones |
-| `export(filepath)` | Exporta el análisis a .txt o .md |
+| `quality_score()` | Score de calidad del dataset de 0 a 100 con grado A–F |
+| `narrative()` | Análisis narrativo interpretativo en párrafos |
+| `suggest()` | Sugiere modelos ML y pasos de preprocesamiento |
 | `compare(df2)` | Compara dos datasets y detecta data drift |
-| `suggest()` | Sugiere modelos ML y preprocesamiento |
+| `export(filepath)` | Exporta a `.txt`, `.md` o reporte `.html` interactivo |
 
 ---
 
@@ -96,6 +98,36 @@ El segundo dataset tiene 267 registros menos.
 ⚠  Posible data drift en: Age.
 → Dispersión cambió más del 30%. Revisa antes de producción.
 ```
+
+### Score de calidad
+
+```python
+resultado = n.quality_score()
+print(resultado["resumen"])
+print(resultado["penalizaciones"])
+```
+El dataset obtuvo un score de 72/100 (grado C).
+{'nulos': 12.15, 'duplicados': 0, 'constantes': 0, 'cardinalidad': 0, 'cols_nulas': 10}
+
+### Análisis narrativo
+
+```python
+print(n.narrative())
+```
+Con 891 registros y 12 columnas, el dataset es de tamaño moderado — adecuado
+para la mayoría de algoritmos de machine learning. Contiene 7 variables numéricas
+y 5 categóricas. El problema de calidad más crítico es la columna "Cabin", que
+concentra el 77.1% de valores nulos...
+
+### Exportar reporte HTML interactivo
+
+```python
+n.export("reporte_titanic.html")  # reporte visual con gráficas
+n.export("reporte_titanic.txt")   # texto plano
+```
+
+El reporte HTML incluye navegación por secciones, semáforo de salud por columna,
+histogramas, gráficas interactivas con Chart.js, score de calidad y sugerencias de ML.
 
 ### Soporte multilenguaje
 ```python
