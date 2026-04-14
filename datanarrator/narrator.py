@@ -243,6 +243,11 @@ class Narrator:
         corrs = self._data["correlations"]
         qs = self.quality_score()
         narrative_text = self.narrative().replace("\n", "<br>")
+
+        # --- Textos de audiencia para sección S7 ---
+        narrate_exec   = self._narrate_executive().replace("\n", "<br>")
+        narrate_tech   = self._narrate_technical().replace("\n", "<br>")
+        narrate_simple = self._narrate_non_technical().replace("\n", "<br>")
         suggest_text = self.suggest()
 
         # --- Score donut ---
@@ -421,7 +426,7 @@ class Narrator:
 
         # Títulos
         if self.lang == "es":
-            t_nav = ["Resumen", "Numéricas", "Categóricas", "Calidad", "Alertas", "ML", "Narrativo"]
+            t_nav = ["Resumen", "Numéricas", "Categóricas", "Calidad", "Alertas", "ML", "Narrativo", "👥 Audiencias"]
             t_title = "Reporte de Análisis"
             t_overview = "Resumen General"
             t_semaforo = "Estado de columnas"
@@ -448,8 +453,12 @@ class Narrator:
             t_no_alerts = "✓ No se detectaron alertas."
             t_no_nulls = "✓ Sin valores nulos"
             t_pen = "Desglose de penalizaciones"
+            t_audience = "Narrativa por Audiencia"
+            t_aud_exec = "Ejecutivo"
+            t_aud_tech = "Técnico"
+            t_aud_simple = "No técnico"
         else:
-            t_nav = ["Overview", "Numeric", "Categorical", "Quality", "Alerts", "ML", "Narrative"]
+            t_nav = ["Overview", "Numeric", "Categorical", "Quality", "Alerts", "ML", "Narrative", "👥 Audiences"]
             t_title = "Analysis Report"
             t_overview = "Overview"
             t_semaforo = "Column health"
@@ -476,6 +485,10 @@ class Narrator:
             t_no_alerts = "✓ No alerts detected."
             t_no_nulls = "✓ No null values"
             t_pen = "Penalty breakdown"
+            t_audience = "Narrative by Audience"
+            t_aud_exec = "Executive"
+            t_aud_tech = "Technical"
+            t_aud_simple = "Non-technical"
 
         # Pre-calculamos secciones condicionales para evitar
         # backslashes dentro de f-strings (incompatible con Python 3.10)
@@ -620,6 +633,7 @@ class Narrator:
   <button onclick="showSection(4)">{t_nav[4]}</button>
   <button onclick="showSection(5)">{t_nav[5]}</button>
   <button onclick="showSection(6)">{t_nav[6]}</button>
+  <button onclick="showSection(7)">{t_nav[7]}</button>
   <button class="pdf-btn" onclick="window.print()">{t_pdf}</button>
 </nav>
 
@@ -717,9 +731,31 @@ class Narrator:
   <div class="narrative-box">{narrative_text}</div>
 </div>
 
+<!-- S7: AUDIENCIAS -->
+<div class="section" id="s7">
+  <h2>{t_audience}</h2>
+  <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap">
+    <button id="tab-exec" onclick="showAudience('exec')" style="padding:0.6rem 1.2rem;border-radius:8px;border:2px solid #4F46E5;background:#4F46E5;color:white;cursor:pointer;font-weight:600;font-size:0.85rem">{t_aud_exec}</button>
+    <button id="tab-tech" onclick="showAudience('tech')" style="padding:0.6rem 1.2rem;border-radius:8px;border:2px solid #4F46E5;background:white;color:#4F46E5;cursor:pointer;font-weight:600;font-size:0.85rem">{t_aud_tech}</button>
+    <button id="tab-simple" onclick="showAudience('simple')" style="padding:0.6rem 1.2rem;border-radius:8px;border:2px solid #4F46E5;background:white;color:#4F46E5;cursor:pointer;font-weight:600;font-size:0.85rem">{t_aud_simple}</button>
+  </div>
+  <div id="aud-exec" class="narrative-box" style="display:block"><span style="display:inline-block;background:#4F46E5;color:white;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:600;margin-bottom:1rem">{t_aud_exec}</span><br><br>{narrate_exec}</div>
+  <div id="aud-tech" class="narrative-box" style="display:none"><span style="display:inline-block;background:#06b6d4;color:white;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:600;margin-bottom:1rem">{t_aud_tech}</span><br><br>{narrate_tech}</div>
+  <div id="aud-simple" class="narrative-box" style="display:none"><span style="display:inline-block;background:#22c55e;color:white;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:600;margin-bottom:1rem">{t_aud_simple}</span><br><br>{narrate_simple}</div>
+</div>
+
 <footer>{t_generated} v{self._get_version()} · <a href="https://pypi.org/project/datanarrator/" style="color:#4F46E5">PyPI</a></footer>
 
 <script>
+function showAudience(id){{
+  ["exec","tech","simple"].forEach(function(a){{
+    var panel=document.getElementById("aud-"+a);
+    var btn=document.getElementById("tab-"+a);
+    if(panel) panel.style.display=a===id?"block":"none";
+    if(btn){{ btn.style.background=a===id?"#4F46E5":"white"; btn.style.color=a===id?"white":"#4F46E5"; }}
+  }});
+}}
+
 function showSection(idx){{
   document.querySelectorAll(".section").forEach((s,i)=>s.classList.toggle("active",i===idx));
   document.querySelectorAll("nav button:not(.pdf-btn)").forEach((b,i)=>b.classList.toggle("active",i===idx));
@@ -925,6 +961,416 @@ new Chart(document.getElementById("colTypesChart"),{{
             self._narrative_recommendations(),
         ]
         return "\n\n".join(s for s in sections if s)
+
+    # ------------------------------------------------------------------
+    # narrate(audience=...) — Narrativa adaptada por audiencia
+    # ------------------------------------------------------------------
+
+    SUPPORTED_AUDIENCES = ("executive", "technical", "non-technical")
+
+    def narrate(self, audience: str = "technical") -> str:
+        """Genera una narrativa adaptada al tipo de audiencia.
+
+        A diferencia de narrative(), que siempre genera el mismo texto,
+        narrate() adapta el lenguaje, nivel de detalle y enfoque según
+        quién va a leer el análisis.
+
+        Parameters
+        ----------
+        audience : str, optional
+            Tipo de audiencia. Opciones:
+            - 'executive'     : resumen ejecutivo sin jerga técnica,
+                                enfocado en hallazgos clave y decisiones.
+            - 'technical'     : análisis completo con estadísticas,
+                                distribuciones y recomendaciones de ML.
+            - 'non-technical' : lenguaje simple, sin números complejos,
+                                con analogías y explicaciones accesibles.
+            Por defecto es 'technical'.
+
+        Returns
+        -------
+        str
+            Narrativa adaptada a la audiencia seleccionada.
+
+        Raises
+        ------
+        ValueError
+            Si el valor de audience no está en SUPPORTED_AUDIENCES.
+
+        Examples
+        --------
+        >>> n = Narrator(df, lang="es")
+        >>> print(n.narrate(audience="executive"))
+        >>> print(n.narrate(audience="technical"))
+        >>> print(n.narrate(audience="non-technical"))
+        >>> for a in ["executive", "technical", "non-technical"]:
+        ...     print(f"\n=== {a.upper()} ===")
+        ...     print(n.narrate(audience=a))
+        """
+        if audience not in self.SUPPORTED_AUDIENCES:
+            raise ValueError(
+                f"Audiencia '{audience}' no soportada. "
+                f"Usa: {self.SUPPORTED_AUDIENCES}"
+            )
+        if audience == "executive":
+            return self._narrate_executive()
+        elif audience == "technical":
+            return self._narrate_technical()
+        return self._narrate_non_technical()
+
+    def _narrate_executive(self) -> str:
+        """Narrativa ejecutiva: hallazgos clave, sin jerga, orientada a decisiones.
+
+        Máximo 4-5 oraciones. Se enfoca en tamaño del dataset, problema
+        de calidad más crítico, hallazgo principal y recomendación de acción.
+
+        Returns
+        -------
+        str
+            Narrativa ejecutiva concisa en el idioma configurado.
+        """
+        ov = self._data["overview"]
+        numeric = self._data["numeric"]
+        alerts = self._data["alerts"]
+        corrs = self._data["correlations"]
+        qs = self.quality_score()
+        lines = []
+
+        if self.lang == "es":
+            calidad = (
+                "en buen estado" if qs["score"] >= 80
+                else "con problemas de calidad que requieren atención"
+                if qs["score"] >= 60
+                else "con problemas graves que deben resolverse antes de usarlo"
+            )
+            lines.append(
+                f"El dataset cuenta con {ov['rows']:,} registros y se encuentra "
+                f"{calidad} (score de calidad: {qs['score']}/100)."
+            )
+            high_null = next(
+                (a for a in alerts if a["type"] == "high_nulls"), None
+            )
+            if high_null:
+                col = high_null.get("col", "")
+                pct = high_null["message"].split()[2]
+                lines.append(
+                    f"El problema más urgente es la columna '{col}', "
+                    f"que tiene {pct} de datos faltantes y debe tratarse "
+                    f"antes de cualquier análisis."
+                )
+            elif ov["duplicates"] > 0:
+                lines.append(
+                    f"Se encontraron {ov['duplicates']} registros duplicados "
+                    f"que deben eliminarse para evitar conclusiones incorrectas."
+                )
+            binary_cols = [
+                c for c in numeric
+                if set(self.df[c["col"]].dropna().unique()) <= {0, 1}
+            ]
+            if binary_cols:
+                col = binary_cols[0]["col"]
+                pct = round(binary_cols[0]["mean"] * 100, 1)
+                lines.append(
+                    f"La variable '{col}' es el probable indicador de resultado: "
+                    f"el {pct}% de los registros tienen resultado positivo."
+                )
+            elif corrs:
+                top = corrs[0]
+                direccion = "positiva" if top["correlation"] > 0 else "negativa"
+                lines.append(
+                    f"La relación más fuerte es entre '{top['col_a']}' y "
+                    f"'{top['col_b']}' — correlación {direccion} de "
+                    f"{top['correlation']}."
+                )
+            if qs["score"] >= 80:
+                lines.append(
+                    "El dataset está listo para análisis o modelado "
+                    "sin necesidad de limpieza mayor."
+                )
+            elif qs["score"] >= 60:
+                lines.append(
+                    "Se recomienda una limpieza básica antes de usar "
+                    "estos datos para tomar decisiones."
+                )
+            else:
+                lines.append(
+                    "Este dataset requiere trabajo de limpieza significativo "
+                    "antes de ser confiable para decisiones."
+                )
+            header = "[ Resumen Ejecutivo ]\n"
+        else:
+            calidad = (
+                "in good shape" if qs["score"] >= 80
+                else "with quality issues that need attention"
+                if qs["score"] >= 60
+                else "with serious issues that must be resolved before use"
+            )
+            lines.append(
+                f"The dataset contains {ov['rows']:,} records and is {calidad} "
+                f"(quality score: {qs['score']}/100)."
+            )
+            high_null = next(
+                (a for a in alerts if a["type"] == "high_nulls"), None
+            )
+            if high_null:
+                col = high_null.get("col", "")
+                pct = high_null["message"].split()[2]
+                lines.append(
+                    f"The most urgent issue is column '{col}', "
+                    f"which has {pct} missing data and must be addressed "
+                    f"before any analysis."
+                )
+            elif ov["duplicates"] > 0:
+                lines.append(
+                    f"{ov['duplicates']} duplicate records were found "
+                    f"and should be removed to avoid incorrect conclusions."
+                )
+            binary_cols = [
+                c for c in numeric
+                if set(self.df[c["col"]].dropna().unique()) <= {0, 1}
+            ]
+            if binary_cols:
+                col = binary_cols[0]["col"]
+                pct = round(binary_cols[0]["mean"] * 100, 1)
+                lines.append(
+                    f"'{col}' is the likely outcome variable: "
+                    f"{pct}% of records have a positive result."
+                )
+            elif corrs:
+                top = corrs[0]
+                direction = "positive" if top["correlation"] > 0 else "negative"
+                lines.append(
+                    f"Strongest relationship: '{top['col_a']}' and "
+                    f"'{top['col_b']}' — {direction} correlation of "
+                    f"{top['correlation']}."
+                )
+            if qs["score"] >= 80:
+                lines.append(
+                    "The dataset is ready for analysis or modeling "
+                    "without major cleaning."
+                )
+            elif qs["score"] >= 60:
+                lines.append(
+                    "Basic cleaning is recommended before using this data "
+                    "for decision-making."
+                )
+            else:
+                lines.append(
+                    "This dataset requires significant cleaning work "
+                    "before it can be trusted for decisions."
+                )
+            header = "[ Executive Summary ]\n"
+
+        return header + " ".join(lines)
+
+    def _narrate_technical(self) -> str:
+        """Narrativa técnica: estadísticas completas para científicos de datos.
+
+        Equivalente a narrative() con un header explícito de audiencia.
+        Incluye overview, numérico, correlaciones, alertas y recomendaciones.
+
+        Returns
+        -------
+        str
+            Narrativa técnica completa en el idioma configurado.
+        """
+        if self.lang == "es":
+            header = "[ Análisis Técnico — Para Científicos de Datos ]\n"
+        else:
+            header = "[ Technical Analysis — For Data Scientists ]\n"
+        return header + self.narrative()
+
+    def _narrate_non_technical(self) -> str:
+        """Narrativa accesible: lenguaje simple, sin jerga, con analogías.
+
+        Diseñada para personas sin formación en estadística. Evita términos
+        como skewness, outlier o IQR, reemplazándolos con explicaciones
+        cotidianas.
+
+        Returns
+        -------
+        str
+            Narrativa accesible en el idioma configurado.
+        """
+        ov = self._data["overview"]
+        numeric = self._data["numeric"]
+        alerts = self._data["alerts"]
+        corrs = self._data["correlations"]
+        qs = self.quality_score()
+        lines = []
+
+        if self.lang == "es":
+            lines.append(
+                f"Este conjunto de datos tiene información sobre "
+                f"{ov['rows']:,} elementos, organizados en "
+                f"{ov['cols']} categorías diferentes."
+            )
+            if ov["null_pct"] == 0:
+                lines.append(
+                    "Todos los datos están completos — no falta ninguna "
+                    "información, lo cual es ideal."
+                )
+            elif ov["null_pct"] < 5:
+                lines.append(
+                    f"Casi todos los datos están completos. "
+                    f"Solo falta un {ov['null_pct']}% de la información, "
+                    f"lo cual es manejable."
+                )
+            else:
+                col_problema = next(
+                    (a.get("col", "") for a in alerts
+                     if a["type"] == "high_nulls"), None
+                )
+                if col_problema:
+                    lines.append(
+                        f"Hay información que falta, especialmente en "
+                        f"'{col_problema}'. Imagina un formulario donde "
+                        f"muchas personas dejaron ese campo en blanco — "
+                        f"eso es lo que ocurre aquí."
+                    )
+                else:
+                    lines.append(
+                        f"Hay un {ov['null_pct']}% de información faltante, "
+                        f"como espacios en blanco en un formulario."
+                    )
+            skewed = [c for c in numeric if abs(c["skew"]) > 1]
+            if skewed:
+                cols_str = ", ".join(
+                    f"'{c['col']}'" for c in skewed[:2]
+                )
+                lines.append(
+                    f"En columnas como {cols_str}, la mayoría de los valores "
+                    f"son similares entre sí, pero hay algunos casos muy "
+                    f"distintos — como en un salón donde casi todos sacan "
+                    f"entre 7 y 9, pero alguien saca 10 y otro 2."
+                )
+            outlier_cols = [c for c in numeric if c["outlier_count"] > 0]
+            if outlier_cols:
+                n_cols = len(outlier_cols)
+                lines.append(
+                    f"En {n_cols} "
+                    f"{'columna' if n_cols == 1 else 'columnas'} "
+                    f"hay valores inusualmente altos o bajos — no "
+                    f"necesariamente errores, pero vale la pena revisarlos."
+                )
+            if corrs:
+                top = corrs[0]
+                if top["correlation"] > 0:
+                    relacion = (
+                        f"cuando '{top['col_a']}' sube, "
+                        f"'{top['col_b']}' también tiende a subir"
+                    )
+                else:
+                    relacion = (
+                        f"cuando '{top['col_a']}' sube, "
+                        f"'{top['col_b']}' tiende a bajar"
+                    )
+                lines.append(
+                    f"Hay una relación interesante: {relacion}. "
+                    f"Esto puede ser una pista clave para entender "
+                    f"el comportamiento de los datos."
+                )
+            if qs["score"] >= 80:
+                lines.append(
+                    "En general, estos datos están en muy buen estado "
+                    "y pueden usarse con confianza."
+                )
+            elif qs["score"] >= 60:
+                lines.append(
+                    "En general, estos datos están en condiciones aceptables, "
+                    "aunque tienen aspectos que podrían mejorarse."
+                )
+            else:
+                lines.append(
+                    "Estos datos tienen varios problemas que deberían "
+                    "corregirse antes de sacar conclusiones."
+                )
+            header = "[ Explicación Simple — Para Todos ]\n"
+        else:
+            lines.append(
+                f"This dataset contains information about "
+                f"{ov['rows']:,} items, organized into "
+                f"{ov['cols']} different categories."
+            )
+            if ov["null_pct"] == 0:
+                lines.append(
+                    "All data is complete — no information is missing, "
+                    "which is ideal."
+                )
+            elif ov["null_pct"] < 5:
+                lines.append(
+                    f"Almost all data is complete. "
+                    f"Only {ov['null_pct']}% of the information is missing, "
+                    f"which is manageable."
+                )
+            else:
+                col_problema = next(
+                    (a.get("col", "") for a in alerts
+                     if a["type"] == "high_nulls"), None
+                )
+                if col_problema:
+                    lines.append(
+                        f"There is missing information, especially in "
+                        f"'{col_problema}'. Think of it like a form where "
+                        f"many people left that field blank."
+                    )
+                else:
+                    lines.append(
+                        f"About {ov['null_pct']}% of information is missing, "
+                        f"like blank spaces in a form."
+                    )
+            skewed = [c for c in numeric if abs(c["skew"]) > 1]
+            if skewed:
+                cols_str = ", ".join(f"'{c['col']}'" for c in skewed[:2])
+                lines.append(
+                    f"In columns like {cols_str}, most values are similar, "
+                    f"but there are some very different cases — like a classroom "
+                    f"where most students score 7-9, but someone scores 10 and "
+                    f"another scores 2."
+                )
+            outlier_cols = [c for c in numeric if c["outlier_count"] > 0]
+            if outlier_cols:
+                n_cols = len(outlier_cols)
+                lines.append(
+                    f"In {n_cols} "
+                    f"{'column' if n_cols == 1 else 'columns'} "
+                    f"there are unusually high or low values — not necessarily "
+                    f"errors, but worth reviewing."
+                )
+            if corrs:
+                top = corrs[0]
+                if top["correlation"] > 0:
+                    relation = (
+                        f"when '{top['col_a']}' goes up, "
+                        f"'{top['col_b']}' tends to go up too"
+                    )
+                else:
+                    relation = (
+                        f"when '{top['col_a']}' goes up, "
+                        f"'{top['col_b']}' tends to go down"
+                    )
+                lines.append(
+                    f"There is an interesting pattern: {relation}. "
+                    f"This could be a key clue for understanding the data."
+                )
+            if qs["score"] >= 80:
+                lines.append(
+                    "Overall, this data is in very good shape "
+                    "and can be used with confidence."
+                )
+            elif qs["score"] >= 60:
+                lines.append(
+                    "Overall, this data is in acceptable condition, "
+                    "though there are areas that could be improved."
+                )
+            else:
+                lines.append(
+                    "This data has several issues that should be "
+                    "corrected before drawing conclusions."
+                )
+            header = "[ Simple Explanation — For Everyone ]\n"
+
+        return header + "\n\n".join(lines)
 
     def _narrative_overview(self) -> str:
         """Genera el párrafo de contexto general del dataset.
