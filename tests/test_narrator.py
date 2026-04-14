@@ -259,6 +259,7 @@ def test_compare_english(df_basic):
     n = Narrator(df_basic, lang="en")
     result = n.compare(df2)
     assert "comparison" in result
+
 # ------------------------------------------------------------------
 # Tests de suggest()
 # ------------------------------------------------------------------
@@ -432,3 +433,46 @@ def test_translate_alert_english_high_cardinality(df_basic):
     assert "nombre" in msg
     assert "unique values" in msg
     assert "target encoding" in sug
+
+# -----------------------------------------------------------------------
+# Tests de narrative()
+# -----------------------------------------------------------------------
+
+def test_narrative_returns_string(df_basic):
+    """Verifica que narrative() retorna un string."""
+    n = Narrator(df_basic, lang="es")
+    assert isinstance(n.narrative(), str)
+
+
+def test_narrative_not_empty(df_basic):
+    """Verifica que narrative() no retorna un string vacío."""
+    n = Narrator(df_basic, lang="es")
+    assert len(n.narrative()) > 0
+
+
+def test_narrative_english(df_basic):
+    """Verifica que narrative() en inglés no contiene palabras en español."""
+    n = Narrator(df_basic, lang="en")
+    result = n.narrative()
+    assert "registros" not in result
+    assert "columnas" not in result
+
+
+def test_narrative_spanish(df_basic):
+    """Verifica que narrative() en español contiene palabras clave."""
+    n = Narrator(df_basic, lang="es")
+    result = n.narrative()
+    assert "dataset" in result.lower()
+
+
+def test_narrative_numeric_only(df_numeric_only):
+    """Verifica que narrative() funciona con dataset solo numérico."""
+    n = Narrator(df_numeric_only, lang="es")
+    assert isinstance(n.narrative(), str)
+
+
+def test_narrative_with_nulls(df_with_nulls):
+    """Verifica que narrative() menciona nulos cuando los hay."""
+    n = Narrator(df_with_nulls, lang="es")
+    result = n.narrative()
+    assert "nulos" in result or "null" in result
