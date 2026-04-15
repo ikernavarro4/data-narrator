@@ -18,6 +18,12 @@ pip install datanarrator
 
 ---
 
+
+## Requisitos
+- Python 3.9+
+- Las dependencias (pandas, numpy, matplotlib) se instalan automáticamente con pip.
+
+---
 ## Uso rápido
 ```python
 import pandas as pd
